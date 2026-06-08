@@ -1,7 +1,7 @@
 import { OpenAI } from "openai";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY || "not-configured",
 });
 
 interface LeadOutreachInput {
@@ -268,7 +268,6 @@ export async function generateDailyBriefing() {
     return generateFallbackDailyBriefing();
   }
 
-  // This would typically pull from database, but for MVP we'll generate placeholder
   const prompt = `
 You are a founder's daily briefing assistant for Merit.
 
@@ -298,14 +297,52 @@ Generate a daily briefing in JSON format:
   }
 }
 
+export async function generateFinanceReport(input: FinanceReportInput) {
+  if (!process.env.OPENAI_API_KEY) {
+    return generateFallbackFinanceReport(input);
+  }
+
+  const prompt = `
+You are a CFO-style operating advisor for Merit.
+
+${MERIT_CONTEXT}
+
+Generate a finance health report using:
+- Costs: ${input.costs ?? "not provided"}
+- Revenue: ${input.revenue ?? "not provided"}
+- Cash Balance: ${input.cashBalance ?? "not provided"}
+- Runway: ${input.runway ?? "not provided"}
+- Budget Targets: ${JSON.stringify(input.budgetTargets || {})}
+
+Return JSON:
+{
+  "report": "Concise finance summary with cost warnings, suggested cuts, and runway interpretation"
+}
+
+Be direct, practical, and do not invent numbers.
+`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.5,
+    });
+
+    const content = response.choices[0].message.content;
+    if (!content) throw new Error("No response from OpenAI");
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("Could not parse JSON response");
+    return JSON.parse(jsonMatch[0]);
+  } catch (error) {
+    console.error("OpenAI API error:", error);
+    return generateFallbackFinanceReport(input);
+  }
+}
+
 // Fallback functions when API is not configured
 function generateFallbackLinkedInOutreach(input: LeadOutreachInput) {
   const firstNameOnly = input.name.split(" ")[0];
-
-  let positioning = "Merit helps recruiters evaluate students through real projects and proof of ability instead of relying only on resumes.";
-  if (input.leadType === "investor") {
-    positioning = "Merit is building proof-of-ability infrastructure for early talent, starting with student portfolios and recruiter discovery.";
-  }
 
   return {
     connectionRequest: `Hi ${firstNameOnly}, impressed by your work at ${input.company} in ${input.role}. Connecting for a quick chat about early talent evaluation.`,
@@ -339,7 +376,7 @@ Next Month: ${input.nextMonthGoals || "Scale recruiter pilot and improve student
   };
 }
 
-function generateFallbackWeeklyReview(input: WeeklyReviewInput) {
+function generateFallbackWeeklyReview() {
   return {
     review: `What Moved: Focus areas were executed. Made progress on key initiatives.
 
@@ -372,6 +409,35 @@ Key Metrics to Watch:
 Risks to Monitor:
 - Execution velocity on portfolio improvements
 - Recruiter churn if experience isn't smooth`,
+  };
+}
+
+function generateFallbackFinanceReport(input: FinanceReportInput) {
+  const costs = input.costs || 0;
+  const revenue = input.revenue || 0;
+  const netBurn = costs - revenue;
+  const runwayText =
+    netBurn <= 0
+      ? "Merit is cashflow positive on the provided monthly figures."
+      : `Estimated runway is ${input.runway?.toFixed?.(1) || input.runway || "unknown"} months.`;
+
+  return {
+    report: `Finance Summary:
+- Monthly costs: $${costs.toLocaleString()}
+- Monthly revenue: $${revenue.toLocaleString()}
+- Cash balance: $${(input.cashBalance || 0).toLocaleString()}
+- ${runwayText}
+
+Cost Warnings:
+- Watch AI/API spend and contractor scope before increasing burn.
+- Keep hosting costs proportional to active usage.
+
+Suggested Cuts:
+- Audit repeated AI calls and batch low-value generations.
+- Delay non-critical design or marketing spend until recruiter validation improves.
+
+Runway Interpretation:
+Maintain discipline until recruiter demand is repeatable. Spend should map directly to validation, product quality, or fundraising readiness.`,
   };
 }
 

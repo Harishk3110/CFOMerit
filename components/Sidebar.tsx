@@ -54,18 +54,18 @@ export function Sidebar() {
             const Icon = item.icon;
             const isActive = pathname === item.href;
             return (
-              <Link key={item.href} href={item.href}>
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                    isActive
-                      ? "bg-blue-600 text-white"
-                      : "text-slate-300 hover:bg-slate-800"
-                  }`}
-                >
-                  <Icon size={20} />
-                  <span className="text-sm font-medium">{item.name}</span>
-                </button>
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setIsOpen(false)}
+                className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 transition-colors ${
+                  isActive
+                    ? "bg-blue-600 text-white"
+                    : "text-slate-300 hover:bg-slate-800"
+                }`}
+              >
+                <Icon size={20} />
+                <span className="text-sm font-medium">{item.name}</span>
               </Link>
             );
           })}

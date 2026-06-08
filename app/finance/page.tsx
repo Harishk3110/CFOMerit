@@ -1,358 +1,219 @@
 "use client";
 
-import React, { useState } from "react";
-import { Plus, AlertCircle, TrendingDown } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { FormEvent, useMemo, useState } from "react";
+import { AlertCircle, Download, Plus, Trash2 } from "lucide-react";
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import type { Cost } from "@/lib/types";
+import { financeMetrics, formatMoney, spendByCategory } from "@/lib/command-center";
+import { seedCosts, seedFinanceSettings } from "@/lib/seed-data";
+import { useLocalRecords } from "@/lib/use-local-records";
 
-const costs = [
-  {
-    id: 1,
-    vendor: "Supabase",
-    category: "hosting",
-    amount: 250,
-    frequency: "monthly",
-    recurring: true,
-  },
-  {
-    id: 2,
-    vendor: "Vercel",
-    category: "hosting",
-    amount: 150,
-    frequency: "monthly",
-    recurring: true,
-  },
-  {
-    id: 3,
-    vendor: "OpenAI API",
-    category: "AI/API",
-    amount: 500,
-    frequency: "monthly",
-    recurring: true,
-  },
-  {
-    id: 4,
-    vendor: "Domain + SSL",
-    category: "software",
-    amount: 50,
-    frequency: "annual",
-    recurring: true,
-  },
-  {
-    id: 5,
-    vendor: "Figma",
-    category: "design",
-    amount: 80,
-    frequency: "monthly",
-    recurring: true,
-  },
-  {
-    id: 6,
-    vendor: "Linear",
-    category: "software",
-    amount: 50,
-    frequency: "monthly",
-    recurring: true,
-  },
-  {
-    id: 7,
-    vendor: "Design Contractor",
-    category: "contractor",
-    amount: 3000,
-    frequency: "one-time",
-    recurring: false,
-  },
-];
-
-const monthlyBurnData = [
-  { month: "Feb", burn: 7200 },
-  { month: "Mar", burn: 8100 },
-  { month: "Apr", burn: 8500 },
-  { month: "May", burn: 8300 },
-  { month: "Jun", burn: 8500 },
-];
-
-const categorySpend = [
-  { name: "Hosting", value: 400 },
-  { name: "AI/API", value: 500 },
-  { name: "Design", value: 80 },
-  { name: "Software", value: 100 },
-  { name: "Contractor", value: 3000 },
-];
-
-const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
+const categories: Cost["category"][] = ["software", "hosting", "AI/API", "design", "marketing", "legal", "accounting", "events", "contractor", "office", "travel", "miscellaneous"];
+const frequencies: Cost["billing_frequency"][] = ["one-time", "monthly", "quarterly", "annual"];
+const colors = ["#2563eb", "#059669", "#d97706", "#dc2626", "#7c3aed", "#0f766e", "#475569"];
 
 export default function FinancePage() {
-  const monthlyRecurring = costs
-    .filter((c) => c.recurring && c.frequency === "monthly")
-    .reduce((sum, c) => sum + c.amount, 0);
-
-  const annualOneTime = costs
-    .filter((c) => !c.recurring)
-    .reduce((sum, c) => sum + c.amount, 0);
-
-  const monthlyBurn = monthlyRecurring + annualOneTime / 12;
-  const monthlyRevenue = 2000; // Sample data
-  const netBurn = monthlyBurn - monthlyRevenue;
-  const currentCash = 68000;
-  const runway = Math.round(currentCash / netBurn);
-
+  const { records: costs, addRecord, deleteRecord } = useLocalRecords("merit.costs", seedCosts);
   const [showAddCost, setShowAddCost] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [vendorSearch, setVendorSearch] = useState("");
+
+  const filteredCosts = costs.filter((cost) => {
+    const matchesCategory = categoryFilter === "all" || cost.category === categoryFilter;
+    const matchesVendor = cost.vendor.toLowerCase().includes(vendorSearch.toLowerCase());
+    return matchesCategory && matchesVendor;
+  });
+  const metrics = financeMetrics(costs, seedFinanceSettings);
+  const categoryData = spendByCategory(costs);
+  const burnProjection = useMemo(
+    () => [
+      { month: "Current", burn: Math.round(metrics.monthlyBurn) },
+      { month: "3 mo", burn: Math.round(metrics.projectedThreeMonthSpend) },
+      { month: "6 mo", burn: Math.round(metrics.projectedSixMonthSpend) },
+    ],
+    [metrics.monthlyBurn, metrics.projectedSixMonthSpend, metrics.projectedThreeMonthSpend]
+  );
+
+  const addCost = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const frequency = String(data.get("billing_frequency")) as Cost["billing_frequency"];
+    const record: Cost = {
+      id: `cost-${crypto.randomUUID()}`,
+      vendor: String(data.get("vendor") || "New vendor"),
+      category: String(data.get("category")) as Cost["category"],
+      amount: Number(data.get("amount") || 0),
+      currency: "USD",
+      billing_frequency: frequency,
+      start_date: String(data.get("start_date") || new Date().toISOString().slice(0, 10)),
+      payment_method: String(data.get("payment_method") || ""),
+      owner: String(data.get("owner") || ""),
+      is_recurring: frequency !== "one-time",
+      notes: String(data.get("notes") || ""),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: "",
+    };
+    addRecord(record);
+    setShowAddCost(false);
+  };
+
+  const exportCsv = () => {
+    const rows = [
+      ["vendor", "category", "amount", "currency", "billing_frequency", "start_date", "owner", "notes"],
+      ...filteredCosts.map((cost) => [cost.vendor, cost.category, cost.amount, cost.currency, cost.billing_frequency, cost.start_date, cost.owner || "", cost.notes || ""]),
+    ];
+    const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "merit-costs.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl">
-      {/* Header */}
-      <div className="mb-8 flex items-start justify-between">
+    <div className="max-w-7xl p-6 lg:p-8">
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Finance</h1>
-          <p className="text-slate-600 mt-1">
-            Cost tracking, burn rate, and runway visibility
-          </p>
+          <h1 className="text-3xl font-bold text-slate-950">Finance</h1>
+          <p className="mt-1 text-slate-600">Cost tracking, burn rate, and runway visibility.</p>
         </div>
-        <button
-          onClick={() => setShowAddCost(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
-        >
-          <Plus size={20} />
-          Add Cost
-        </button>
-      </div>
-
-      {/* Key Finance Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white rounded-lg border border-slate-200 p-6">
-          <p className="text-sm font-medium text-slate-600">Current Cash</p>
-          <p className="text-3xl font-bold text-slate-900 mt-2">
-            ${currentCash.toLocaleString()}
-          </p>
-        </div>
-        <div className="bg-white rounded-lg border border-slate-200 p-6">
-          <p className="text-sm font-medium text-slate-600">Monthly Recurring</p>
-          <p className="text-3xl font-bold text-slate-900 mt-2">
-            ${monthlyRecurring.toLocaleString()}
-          </p>
-        </div>
-        <div className="bg-white rounded-lg border border-slate-200 p-6">
-          <p className="text-sm font-medium text-slate-600">Monthly Revenue</p>
-          <p className="text-3xl font-bold text-blue-600 mt-2">
-            ${monthlyRevenue.toLocaleString()}
-          </p>
-        </div>
-        <div
-          className={`rounded-lg border p-6 ${
-            runway < 6
-              ? "bg-red-50 border-red-200"
-              : "bg-green-50 border-green-200"
-          }`}
-        >
-          <p className="text-sm font-medium text-slate-600">Estimated Runway</p>
-          <p
-            className={`text-3xl font-bold mt-2 ${
-              runway < 6 ? "text-red-900" : "text-green-900"
-            }`}
-          >
-            {runway} months
-          </p>
+        <div className="flex gap-3">
+          <button onClick={exportCsv} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-700 hover:bg-slate-50">
+            <Download size={18} /> Export CSV
+          </button>
+          <button onClick={() => setShowAddCost(true)} className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 font-medium text-white hover:bg-blue-800">
+            <Plus size={18} /> Add Cost
+          </button>
         </div>
       </div>
 
-      {/* Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Burn Over Time */}
-        <div className="bg-white rounded-lg border border-slate-200 p-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">Burn Trend</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={monthlyBurnData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="month" stroke="#94a3b8" />
-              <YAxis stroke="#94a3b8" />
-              <Tooltip
-                formatter={(value) => `$${value}`}
-                contentStyle={{
-                  backgroundColor: "#1e293b",
-                  border: "1px solid #475569",
-                  borderRadius: "8px",
-                  color: "#f1f5f9",
-                }}
-              />
-              <Bar dataKey="burn" fill="#ef4444" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Spend by Category */}
-        <div className="bg-white rounded-lg border border-slate-200 p-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">
-            Spend by Category
-          </h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={categorySpend}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={100}
-                paddingAngle={5}
-                dataKey="value"
-              >
-                {categorySpend.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip
-                formatter={(value) => `$${value}`}
-                contentStyle={{
-                  backgroundColor: "#1e293b",
-                  border: "1px solid #475569",
-                  borderRadius: "8px",
-                  color: "#f1f5f9",
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-            {categorySpend.map((cat, idx) => (
-              <div key={cat.name} className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: COLORS[idx % COLORS.length] }}
-                />
-                <span className="text-slate-700">{cat.name}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+      <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Metric label="Current Cash" value={formatMoney(seedFinanceSettings.current_cash_balance)} />
+        <Metric label="Monthly Burn" value={formatMoney(metrics.monthlyBurn)} />
+        <Metric label="Net Burn" value={metrics.isCashflowPositive ? "Cashflow positive" : formatMoney(metrics.netBurn)} />
+        <Metric label="Runway" value={metrics.isCashflowPositive ? "Cashflow positive" : `${metrics.runwayMonths.toFixed(1)} months`} danger={!metrics.isCashflowPositive && metrics.runwayMonths < 3} />
+        <Metric label="Recurring Monthly Costs" value={formatMoney(metrics.recurringMonthlyCosts)} />
+        <Metric label="One-time Costs" value={formatMoney(metrics.oneTimeCosts)} />
+        <Metric label="Budget Variance" value={formatMoney(metrics.budgetVariance)} danger={metrics.budgetVariance > 0} />
+        <Metric label="6-month Projected Spend" value={formatMoney(metrics.projectedSixMonthSpend)} />
       </div>
 
-      {/* Runway Warning */}
-      {runway < 6 && (
-        <div className="mb-8 bg-red-50 border border-red-200 rounded-lg p-6 flex gap-4">
-          <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <h3 className="font-bold text-red-900">
-              ⚠️ Runway below 6 months
-            </h3>
-            <p className="text-red-800 mt-1">
-              At current burn rate of ${monthlyBurn.toLocaleString()}/month, you have
-              approximately {runway} months of cash left. Consider cost optimization or
-              revenue acceleration.
-            </p>
-          </div>
+      {!metrics.isCashflowPositive && metrics.runwayMonths < 3 && (
+        <div className="mb-8 flex gap-4 rounded-lg border border-red-200 bg-red-50 p-5 text-red-900">
+          <AlertCircle className="shrink-0" />
+          <p>Runway is below 3 months. Review contractor, AI/API, and discretionary costs before adding new spend.</p>
         </div>
       )}
 
-      {/* Costs Table */}
-      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-slate-50 border-b border-slate-200">
+      <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <section className="rounded-lg border border-slate-200 bg-white p-6 lg:col-span-2">
+          <h2 className="mb-4 text-lg font-bold text-slate-950">Burn Projection</h2>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={burnProjection}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="month" stroke="#64748b" />
+              <YAxis stroke="#64748b" />
+              <Tooltip formatter={(value) => formatMoney(Number(value))} />
+              <Bar dataKey="burn" fill="#2563eb" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </section>
+        <section className="rounded-lg border border-slate-200 bg-white p-6">
+          <h2 className="mb-4 text-lg font-bold text-slate-950">Spend by Category</h2>
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie data={categoryData} innerRadius={55} outerRadius={90} dataKey="value">
+                {categoryData.map((entry, index) => <Cell key={entry.name} fill={colors[index % colors.length]} />)}
+              </Pie>
+              <Tooltip formatter={(value) => formatMoney(Number(value))} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="mt-4 space-y-2 text-sm">
+            {categoryData.map((item, index) => (
+              <div key={item.name} className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-slate-700"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: colors[index % colors.length] }} />{item.name}</span>
+                <span className="font-semibold">{formatMoney(item.value)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-3">
+        <input value={vendorSearch} onChange={(event) => setVendorSearch(event.target.value)} placeholder="Search vendor" className="min-w-64 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="all">All categories</option>
+          {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+        </select>
+      </div>
+
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <table className="w-full min-w-[760px]">
+          <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">
-                Vendor
-              </th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">
-                Category
-              </th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">
-                Amount
-              </th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">
-                Frequency
-              </th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">
-                Recurring
-              </th>
+              {["Vendor", "Category", "Amount", "Frequency", "Owner", "Recurring", ""].map((head) => (
+                <th key={head} className="px-5 py-3 text-left text-xs font-semibold uppercase text-slate-600">{head}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {costs.map((cost) => (
-              <tr key={cost.id} className="border-b border-slate-100 hover:bg-slate-50">
-                <td className="px-6 py-4 font-medium text-slate-900">
-                  {cost.vendor}
-                </td>
-                <td className="px-6 py-4 text-slate-600">{cost.category}</td>
-                <td className="px-6 py-4 font-semibold text-slate-900">
-                  ${cost.amount}
-                </td>
-                <td className="px-6 py-4 text-slate-600">{cost.frequency}</td>
-                <td className="px-6 py-4">
-                  <span
-                    className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                      cost.recurring
-                        ? "bg-blue-100 text-blue-800"
-                        : "bg-slate-100 text-slate-800"
-                    }`}
-                  >
-                    {cost.recurring ? "Yes" : "No"}
-                  </span>
+            {filteredCosts.map((cost) => (
+              <tr key={cost.id} className="border-b border-slate-100 last:border-0">
+                <td className="px-5 py-4 font-medium text-slate-950">{cost.vendor}</td>
+                <td className="px-5 py-4 text-slate-700">{cost.category}</td>
+                <td className="px-5 py-4 font-semibold">{formatMoney(cost.amount, cost.currency)}</td>
+                <td className="px-5 py-4 text-slate-700">{cost.billing_frequency}</td>
+                <td className="px-5 py-4 text-slate-700">{cost.owner || "Unassigned"}</td>
+                <td className="px-5 py-4 text-slate-700">{cost.is_recurring ? "Yes" : "No"}</td>
+                <td className="px-5 py-4 text-right">
+                  <button onClick={() => window.confirm(`Delete ${cost.vendor}?`) && deleteRecord(cost.id)} className="rounded-md p-2 text-slate-500 hover:bg-red-50 hover:text-red-700" aria-label={`Delete ${cost.vendor}`}>
+                    <Trash2 size={16} />
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        {!filteredCosts.length && <p className="p-8 text-center text-sm text-slate-600">No costs match the current filters.</p>}
       </div>
 
-      {/* Add Cost Modal */}
       {showAddCost && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h2 className="text-2xl font-bold text-slate-900 mb-6">Add Cost</h2>
-
-            <form className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Vendor Name
-                </label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., Supabase"
-                />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="mb-5 text-xl font-bold text-slate-950">Add Cost</h2>
+            <form onSubmit={addCost} className="space-y-4">
+              <input name="vendor" required placeholder="Vendor" className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+              <div className="grid grid-cols-2 gap-3">
+                <select name="category" className="rounded-lg border border-slate-300 px-3 py-2">{categories.map((category) => <option key={category}>{category}</option>)}</select>
+                <input name="amount" required type="number" min="0" step="0.01" placeholder="Amount" className="rounded-lg border border-slate-300 px-3 py-2" />
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Category
-                </label>
-                <select className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option>software</option>
-                  <option>hosting</option>
-                  <option>AI/API</option>
-                  <option>design</option>
-                  <option>marketing</option>
-                  <option>contractor</option>
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <select name="billing_frequency" className="rounded-lg border border-slate-300 px-3 py-2">{frequencies.map((frequency) => <option key={frequency}>{frequency}</option>)}</select>
+                <input name="start_date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} className="rounded-lg border border-slate-300 px-3 py-2" />
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Amount
-                </label>
-                <input
-                  type="number"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div className="flex gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowAddCost(false)}
-                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
-                >
-                  Add Cost
-                </button>
+              <input name="owner" placeholder="Owner" className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+              <input name="payment_method" placeholder="Payment method" className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+              <textarea name="notes" rows={3} placeholder="Notes" className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowAddCost(false)} className="flex-1 rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
+                <button type="submit" className="flex-1 rounded-lg bg-blue-700 px-4 py-2 font-medium text-white hover:bg-blue-800">Save Cost</button>
               </div>
             </form>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function Metric({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
+  return (
+    <div className={`rounded-lg border p-5 ${danger ? "border-red-200 bg-red-50" : "border-slate-200 bg-white"}`}>
+      <p className="text-sm font-medium text-slate-600">{label}</p>
+      <p className={`mt-2 text-2xl font-bold ${danger ? "text-red-900" : "text-slate-950"}`}>{value}</p>
     </div>
   );
 }

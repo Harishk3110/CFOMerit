@@ -1,308 +1,157 @@
 "use client";
 
-import React, { useState } from "react";
+import { FormEvent, useState } from "react";
 import { Plus, Sparkles } from "lucide-react";
+import { CopyButton } from "@/components/CopyButton";
 import { StatusBadge } from "@/components/StatusBadge";
+import { generatedWeeklyReview } from "@/lib/command-center";
+import { seedTasks, seedWeeklyPlans } from "@/lib/seed-data";
+import type { Task } from "@/lib/types";
+import { useLocalRecords } from "@/lib/use-local-records";
 
-const taskStatuses = ["backlog", "this_week", "in_progress", "blocked", "done"];
-
-const sampleTasks = {
-  backlog: [
-    {
-      id: 1,
-      title: "Build recruiter messaging templates",
-      owner: "Product",
-      priority: "low",
-    },
-    {
-      id: 2,
-      title: "Design analytics dashboard",
-      owner: "Design",
-      priority: "medium",
-    },
-  ],
-  this_week: [
-    {
-      id: 3,
-      title: "Finalize portfolio UI flow",
-      owner: "Product",
-      priority: "high",
-    },
-    {
-      id: 4,
-      title: "5 recruiter validation calls",
-      owner: "Growth",
-      priority: "critical",
-    },
-    {
-      id: 5,
-      title: "Prepare investor data room",
-      owner: "Finance",
-      priority: "high",
-    },
-  ],
-  in_progress: [
-    {
-      id: 6,
-      title: "Implement project verification",
-      owner: "Engineering",
-      priority: "high",
-    },
-    {
-      id: 7,
-      title: "Recruiter onboarding copy",
-      owner: "Marketing",
-      priority: "medium",
-    },
-  ],
-  blocked: [
-    {
-      id: 8,
-      title: "Deploy new student upload flow",
-      owner: "Engineering",
-      priority: "critical",
-      blocker: "Waiting on Supabase storage migration",
-    },
-  ],
-  done: [
-    {
-      id: 9,
-      title: "Student signup flow redesign",
-      owner: "Product",
-      priority: "high",
-    },
-    {
-      id: 10,
-      title: "Stripe integration testing",
-      owner: "Engineering",
-      priority: "medium",
-    },
-  ],
-};
-
-const weeklyPlan = {
-  week: "June 8-14",
-  theme: "Recruiter Validation Sprint",
-  priority1: "Complete portfolio verification feature",
-  priority2: "Complete 5 recruiter validation calls",
-  priority3: "Prepare Series Seed pitch deck",
-  keyMetric: "Recruiter activation rate: target 40%",
-};
+const taskStatuses: Task["status"][] = ["backlog", "this_week", "in_progress", "blocked", "done", "killed"];
+const priorities: Task["priority"][] = ["low", "medium", "high", "critical"];
 
 export default function WeeklyPage() {
-  const [showWeeklyReview, setShowWeeklyReview] = useState(false);
+  const tasksStore = useLocalRecords("merit.tasks", seedTasks);
+  const plansStore = useLocalRecords("merit.weekly_plans", seedWeeklyPlans);
+  const [addStatus, setAddStatus] = useState<Task["status"] | null>(null);
+  const [review, setReview] = useState("");
+  const plan = plansStore.records[0];
+  const tasks = tasksStore.records;
 
-  const weeklyReviewSample = `WEEKLY REVIEW: Week of June 1-7
-
-What Moved:
-✓ Portfolio UI redesign completed and deployed
-✓ 4 recruiter validation calls completed (95% positive feedback)
-✓ Investor intro pipeline expanded to 8 targets
-
-What Didn't Move:
-✗ Project verification feature delayed (engineering blockers)
-✗ Student onboarding email flow not prioritized
-✗ Accelerator outreach stalled
-
-Execution Weak Points:
-- Engineering capacity fully allocated to verification feature
-- Communication delays on blocker resolution
-- Too many parallel initiatives diluting focus
-
-Highest-Leverage Next Actions:
-1. Unblock verification feature immediately (priority critical)
-2. Close 2 investor meetings this week (already booked)
-3. Push recruiter activation push (currently 35%, target 40%)
-4. Kill secondary initiatives to make room for core metrics
-
-Strategic Recommendation for Next Week:
-Stop everything and focus on recruiter validation. We have momentum and investor interest. The verification feature unblock will compound our progress. Push for 60% activation rate by week end.`;
+  const addTask = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const record: Task = {
+      id: `task-${crypto.randomUUID()}`,
+      title: String(data.get("title") || "New task"),
+      description: String(data.get("description") || ""),
+      owner: String(data.get("owner") || "Founder"),
+      priority: String(data.get("priority")) as Task["priority"],
+      status: addStatus || "backlog",
+      due_date: String(data.get("due_date") || ""),
+      linked_strategy_pillar: String(data.get("linked_strategy_pillar") || ""),
+      linked_experiment: "",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: "",
+    };
+    tasksStore.addRecord(record);
+    setAddStatus(null);
+  };
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl">
-      {/* Header */}
+    <div className="max-w-7xl p-6 lg:p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900">Weekly Execution</h1>
-        <p className="text-slate-600 mt-1">
-          Weekly planning board and task execution tracking
-        </p>
+        <h1 className="text-3xl font-bold text-slate-950">Weekly Execution</h1>
+        <p className="mt-1 text-slate-600">Weekly planning board and task execution tracking.</p>
       </div>
 
-      {/* Weekly Plan Card */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="lg:col-span-2 bg-white rounded-lg border border-slate-200 p-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">
-            This Week: {weeklyPlan.week}
-          </h2>
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-700 block mb-1">
-                Weekly Theme
-              </label>
-              <p className="text-lg font-semibold text-slate-900">
-                {weeklyPlan.theme}
-              </p>
+      <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <section className="rounded-lg border border-slate-200 bg-white p-6 lg:col-span-2">
+          <h2 className="mb-4 text-lg font-bold text-slate-950">This Week</h2>
+          {plan ? (
+            <div className="space-y-4">
+              <input value={plan.weekly_theme} onChange={(event) => plansStore.updateRecord(plan.id, { weekly_theme: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-lg font-semibold" />
+              <textarea value={plan.top_3_priorities} onChange={(event) => plansStore.updateRecord(plan.id, { top_3_priorities: event.target.value })} rows={4} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <input value={plan.key_metric_target || ""} onChange={(event) => plansStore.updateRecord(plan.id, { key_metric_target: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             </div>
-            <div className="border-t border-slate-200 pt-4">
-              <label className="text-xs font-semibold text-slate-700 block mb-2">
-                Top 3 Priorities
-              </label>
-              <ol className="space-y-2 text-sm">
-                <li className="flex gap-3">
-                  <span className="font-bold text-blue-600">1.</span>
-                  <span>{weeklyPlan.priority1}</span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="font-bold text-blue-600">2.</span>
-                  <span>{weeklyPlan.priority2}</span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="font-bold text-blue-600">3.</span>
-                  <span>{weeklyPlan.priority3}</span>
-                </li>
-              </ol>
-            </div>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
-              <p className="font-semibold text-blue-900">Key Metric Target</p>
-              <p className="text-blue-800 mt-1">{weeklyPlan.keyMetric}</p>
-            </div>
-          </div>
-        </div>
+          ) : (
+            <p className="text-sm text-slate-600">No weekly plan found.</p>
+          )}
+        </section>
 
-        {/* Quick Stats */}
-        <div className="bg-white rounded-lg border border-slate-200 p-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">Status</h2>
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs text-slate-600">This Week's Tasks</p>
-              <p className="text-3xl font-bold text-slate-900">
-                {sampleTasks.this_week.length}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-600">In Progress</p>
-              <p className="text-2xl font-bold text-blue-600">
-                {sampleTasks.in_progress.length}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-600">Blocked</p>
-              <p className="text-2xl font-bold text-red-600">
-                {sampleTasks.blocked.length}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-600">Completed This Week</p>
-              <p className="text-2xl font-bold text-green-600">
-                {sampleTasks.done.length}
-              </p>
-            </div>
+        <section className="rounded-lg border border-slate-200 bg-white p-6">
+          <h2 className="mb-4 text-lg font-bold text-slate-950">Status</h2>
+          <div className="mb-5 grid grid-cols-2 gap-3">
+            <Stat label="This week" value={tasks.filter((task) => task.status === "this_week").length} />
+            <Stat label="In progress" value={tasks.filter((task) => task.status === "in_progress").length} />
+            <Stat label="Blocked" value={tasks.filter((task) => task.status === "blocked").length} danger />
+            <Stat label="Done" value={tasks.filter((task) => task.status === "done").length} />
           </div>
-
-          <button
-            onClick={() => setShowWeeklyReview(true)}
-            className="w-full mt-6 inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg font-medium hover:bg-blue-200"
-          >
-            <Sparkles size={16} />
-            Generate Review
+          <button onClick={() => setReview(generatedWeeklyReview(tasks))} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-50 px-4 py-2 font-medium text-blue-800 hover:bg-blue-100">
+            <Sparkles size={16} /> Generate Review
           </button>
-        </div>
+        </section>
       </div>
 
-      {/* Kanban Board */}
       <div className="overflow-x-auto pb-4">
-        <div className="flex gap-6 min-w-full">
-          {taskStatuses.map((status) => (
-            <div
-              key={status}
-              className="flex-shrink-0 w-80 bg-slate-50 rounded-lg p-4 border border-slate-200"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-slate-900 text-sm">
-                  {status.replace("_", " ").toUpperCase()}
-                </h3>
-                <span className="text-xs font-semibold text-slate-600">
-                  {sampleTasks[status as keyof typeof sampleTasks]?.length || 0}
-                </span>
-              </div>
-
-              <div className="space-y-2">
-                {(sampleTasks[status as keyof typeof sampleTasks] || []).map((task) => (
-                  <div
-                    key={task.id}
-                    className="p-3 bg-white rounded-lg border border-slate-200 hover:border-blue-400 cursor-move transition-colors"
-                  >
-                    <p className="font-medium text-sm text-slate-900">
-                      {task.title}
-                    </p>
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="text-xs text-slate-600">{task.owner}</span>
-                      <span
-                        className={`text-xs font-semibold px-2 py-1 rounded ${
-                          task.priority === "critical"
-                            ? "bg-red-100 text-red-800"
-                            : task.priority === "high"
-                            ? "bg-orange-100 text-orange-800"
-                            : "bg-slate-100 text-slate-800"
-                        }`}
-                      >
-                        {task.priority}
-                      </span>
-                    </div>
-                    {task.blocker && (
-                      <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
-                        <p className="font-semibold">Blocker:</p>
-                        <p>{task.blocker}</p>
+        <div className="flex gap-4">
+          {taskStatuses.map((status) => {
+            const columnTasks = tasks.filter((task) => task.status === status);
+            return (
+              <section key={status} className="w-80 shrink-0 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-sm font-bold uppercase text-slate-800">{status.replace(/_/g, " ")}</h2>
+                  <span className="text-xs font-semibold text-slate-500">{columnTasks.length}</span>
+                </div>
+                <div className="space-y-3">
+                  {columnTasks.map((task) => (
+                    <div key={task.id} className="rounded-lg border border-slate-200 bg-white p-4">
+                      <div className="mb-3 flex items-start justify-between gap-3">
+                        <p className="font-medium text-slate-950">{task.title}</p>
+                        <StatusBadge status={task.priority} />
                       </div>
-                    )}
-                  </div>
-                ))}
-
-                <button className="w-full mt-4 px-3 py-2 text-sm font-medium text-slate-600 border border-dashed border-slate-300 rounded-lg hover:bg-slate-100">
-                  <Plus size={16} className="mx-auto" />
-                </button>
-              </div>
-            </div>
-          ))}
+                      <p className="text-xs text-slate-600">{task.owner}{task.due_date ? ` - due ${task.due_date}` : ""}</p>
+                      {task.description && <p className="mt-2 text-sm text-slate-700">{task.description}</p>}
+                      <select value={task.status} onChange={(event) => tasksStore.updateRecord(task.id, { status: event.target.value as Task["status"] })} className="mt-3 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs">
+                        {taskStatuses.map((taskStatus) => <option key={taskStatus}>{taskStatus}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                  <button onClick={() => setAddStatus(status)} className="flex w-full items-center justify-center rounded-lg border border-dashed border-slate-300 px-3 py-3 text-slate-600 hover:bg-slate-100" aria-label={`Add task to ${status}`}>
+                    <Plus size={18} />
+                  </button>
+                </div>
+              </section>
+            );
+          })}
         </div>
       </div>
 
-      {/* Weekly Review Modal */}
-      {showWeeklyReview && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-auto p-6">
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900">
-                  AI Weekly Review
-                </h2>
-                <p className="text-slate-600 mt-1">
-                  Blunt, operator-focused execution review
-                </p>
-              </div>
-              <button
-                onClick={() => setShowWeeklyReview(false)}
-                className="text-slate-400 hover:text-slate-600 text-2xl"
-              >
-                ×
-              </button>
+      {review && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="mb-5 text-xl font-bold text-slate-950">AI Weekly Review</h2>
+            <textarea value={review} onChange={(event) => setReview(event.target.value)} rows={16} className="mb-4 w-full rounded-lg border border-slate-300 p-3 text-sm text-slate-700" />
+            <div className="flex gap-3">
+              <CopyButton text={review} label="Copy Review" />
+              <button onClick={() => setReview("")} className="rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-700 hover:bg-slate-50">Close</button>
             </div>
-
-            <div className="bg-slate-50 rounded-lg p-6 mb-6 border border-slate-200">
-              <p className="text-slate-700 whitespace-pre-wrap font-mono text-sm leading-relaxed">
-                {weeklyReviewSample}
-              </p>
-            </div>
-
-            <button
-              onClick={() => setShowWeeklyReview(false)}
-              className="px-4 py-2 border border-slate-300 rounded-lg font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Close
-            </button>
           </div>
         </div>
       )}
+
+      {addStatus && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="mb-5 text-xl font-bold text-slate-950">Add Task</h2>
+            <form onSubmit={addTask} className="space-y-4">
+              <input name="title" required placeholder="Task title" className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+              <textarea name="description" rows={3} placeholder="Description" className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+              <div className="grid grid-cols-2 gap-3">
+                <input name="owner" placeholder="Owner" className="rounded-lg border border-slate-300 px-3 py-2" />
+                <select name="priority" className="rounded-lg border border-slate-300 px-3 py-2">{priorities.map((priority) => <option key={priority}>{priority}</option>)}</select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <input name="due_date" type="date" className="rounded-lg border border-slate-300 px-3 py-2" />
+                <input name="linked_strategy_pillar" placeholder="Strategy pillar" className="rounded-lg border border-slate-300 px-3 py-2" />
+              </div>
+              <div className="flex gap-3 pt-2"><button type="button" onClick={() => setAddStatus(null)} className="flex-1 rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-700 hover:bg-slate-50">Cancel</button><button type="submit" className="flex-1 rounded-lg bg-blue-700 px-4 py-2 font-medium text-white hover:bg-blue-800">Save Task</button></div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value, danger = false }: { label: string; value: number; danger?: boolean }) {
+  return (
+    <div className={`rounded-lg border p-3 ${danger ? "border-red-200 bg-red-50" : "border-slate-200 bg-slate-50"}`}>
+      <p className="text-xs text-slate-600">{label}</p>
+      <p className={`text-2xl font-bold ${danger ? "text-red-800" : "text-slate-950"}`}>{value}</p>
     </div>
   );
 }

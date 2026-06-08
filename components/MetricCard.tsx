@@ -1,7 +1,6 @@
 "use client";
 
-import React from "react";
-import { LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 interface MetricCardProps {
   label: string;
@@ -20,34 +19,27 @@ export function MetricCard({
   subtext,
   trend,
 }: MetricCardProps) {
-  const getColors = (v: string) => {
-    const colorMap: Record<string, string> = {
-      default: "bg-white border-slate-200 text-slate-900",
-      warning: "bg-yellow-50 border-yellow-200 text-yellow-900",
-      danger: "bg-red-50 border-red-200 text-red-900",
-      success: "bg-green-50 border-green-200 text-green-900",
-    };
-    return colorMap[v] || colorMap.default;
+  const colorMap: Record<NonNullable<MetricCardProps["variant"]>, string> = {
+    default: "border-slate-200 bg-white text-slate-950",
+    warning: "border-amber-200 bg-amber-50 text-amber-950",
+    danger: "border-red-200 bg-red-50 text-red-950",
+    success: "border-green-200 bg-green-50 text-green-950",
   };
 
   return (
-    <div className={`border rounded-lg p-6 ${getColors(variant)}`}>
-      <div className="flex items-start justify-between">
-        <div>
+    <div className={`rounded-lg border p-5 ${colorMap[variant]}`}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
           <p className="text-sm font-medium opacity-75">{label}</p>
-          <p className="text-3xl font-bold mt-2">{value}</p>
-          {subtext && <p className="text-xs opacity-60 mt-1">{subtext}</p>}
+          <p className="mt-2 break-words text-2xl font-bold">{value}</p>
+          {subtext && <p className="mt-1 text-xs opacity-70">{subtext}</p>}
         </div>
-        {Icon && <Icon size={24} className="opacity-50" />}
+        {Icon && <Icon size={22} className="shrink-0 opacity-55" />}
       </div>
       {trend && (
-        <div className="mt-4 text-xs">
-          {trend === "up" && <span className="text-green-600">↑ Trending up</span>}
-          {trend === "down" && <span className="text-red-600">↓ Trending down</span>}
-          {trend === "stable" && (
-            <span className="text-slate-600">→ Stable</span>
-          )}
-        </div>
+        <p className="mt-4 text-xs opacity-75">
+          {trend === "up" ? "Upward trend" : trend === "down" ? "Downward trend" : "Stable"}
+        </p>
       )}
     </div>
   );

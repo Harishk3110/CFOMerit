@@ -1,241 +1,171 @@
 "use client";
 
-import React from "react";
+import Link from "next/link";
+import { AlertCircle, CheckCircle2, Clock, DollarSign, TrendingUp, Users, Zap } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { StatusBadge } from "@/components/StatusBadge";
+import { financeMetrics, formatMoney, isDueTodayOrEarlier } from "@/lib/command-center";
 import {
-  Users,
-  TrendingUp,
-  Clock,
-  AlertCircle,
-  CheckCircle2,
-  DollarSign,
-  Zap,
-} from "lucide-react";
-
-// Sample data - in production this would come from Supabase
-const sampleData = {
-  recruiterLeads: 24,
-  investorLeads: 8,
-  activeConversations: 12,
-  followUpsDue: 5,
-  meetingsBooked: 3,
-  monthlyBurn: 8500,
-  estimatedRunway: "8.2 months",
-  lastUpdate: "Updated 2 hours ago",
-};
-
-const upcomingMeetings = [
-  {
-    id: 1,
-    title: "Recruiter Call - TechCorp",
-    time: "2:00 PM Today",
-    attendee: "Sarah Chen",
-    status: "confirmed",
-  },
-  {
-    id: 2,
-    title: "Investor Intro - Accel",
-    time: "Tomorrow 10:00 AM",
-    attendee: "Alex Park",
-    status: "pending",
-  },
-  {
-    id: 3,
-    title: "Customer Interview",
-    time: "Thursday 3:00 PM",
-    attendee: "Jordan Lee",
-    status: "confirmed",
-  },
-];
-
-const weekTopPriorities = [
-  { id: 1, title: "Finalize recruiter onboarding flow", owner: "Product" },
-  { id: 2, title: "Prepare investor data room", owner: "Finance" },
-  { id: 3, title: "Complete 5 recruiter interviews", owner: "Growth" },
-];
-
-const openRisks = [
-  {
-    id: 1,
-    risk: "Runway below 6 months if burn stays at current rate",
-    impact: "high",
-  },
-  { id: 2, risk: "Q3 recruiter churn needs attention", impact: "medium" },
-  {
-    id: 3,
-    risk: "Portfolio UI delays blocking recruiter validation",
-    impact: "high",
-  },
-];
+  seedCosts,
+  seedFinanceSettings,
+  seedInvestors,
+  seedOutreachLeads,
+  seedTasks,
+  seedWeeklyPlans,
+} from "@/lib/seed-data";
+import { useLocalRecords } from "@/lib/use-local-records";
 
 export default function DashboardPage() {
+  const leads = useLocalRecords("merit.outreach_leads", seedOutreachLeads).records;
+  const investors = useLocalRecords("merit.investors", seedInvestors).records;
+  const costs = useLocalRecords("merit.costs", seedCosts).records;
+  const tasks = useLocalRecords("merit.tasks", seedTasks).records;
+  const weeklyPlans = useLocalRecords("merit.weekly_plans", seedWeeklyPlans).records;
+
+  const metrics = financeMetrics(costs, seedFinanceSettings);
+  const followUpsDue = [
+    ...leads
+      .filter((lead) => isDueTodayOrEarlier(lead.next_follow_up_at))
+      .map((lead) => ({
+        id: lead.id,
+        name: `${lead.first_name} ${lead.last_name}`,
+        context: `${lead.role_title} at ${lead.company_name}`,
+        href: "/outreach",
+        status: lead.status,
+      })),
+    ...investors
+      .filter((investor) => isDueTodayOrEarlier(investor.next_follow_up_at))
+      .map((investor) => ({
+        id: investor.id,
+        name: investor.investor_name,
+        context: investor.firm_name || investor.investor_type,
+        href: "/investors",
+        status: investor.status,
+      })),
+  ];
+  const activeConversations = leads.filter((lead) =>
+    ["connected", "first_dm_sent", "follow_up_1_sent", "follow_up_2_sent", "replied", "meeting_booked"].includes(lead.status)
+  ).length;
+  const meetingsBooked =
+    leads.filter((lead) => lead.status === "meeting_booked").length +
+    investors.filter((investor) => investor.status === "meeting_booked").length;
+  const weeklyPlan = weeklyPlans[0];
+  const openRisks = [
+    metrics.runwayMonths < 3 ? "Runway below 3 months. Cut spend or accelerate revenue now." : null,
+    tasks.some((task) => task.status === "blocked") ? "Critical work is blocked on the weekly execution board." : null,
+    leads.filter((lead) => lead.status === "new").length > 3 ? "New outreach leads are piling up without message generation." : null,
+  ].filter(Boolean) as string[];
+
   return (
-    <div className="p-6 lg:p-8 max-w-7xl">
-      {/* Header */}
+    <div className="max-w-7xl p-6 lg:p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-slate-600 mt-1">
-          What do we need to do today to move Merit forward?
-        </p>
+        <h1 className="text-3xl font-bold text-slate-950">Dashboard</h1>
+        <p className="mt-1 text-slate-600">What do we need to do today to move Merit forward?</p>
       </div>
 
-      {/* Key Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <MetricCard
-          label="Recruiter Leads"
-          value={sampleData.recruiterLeads}
-          icon={Users}
-          trend="up"
-        />
-        <MetricCard
-          label="Investor Leads"
-          value={sampleData.investorLeads}
-          icon={TrendingUp}
-        />
-        <MetricCard
-          label="Active Conversations"
-          value={sampleData.activeConversations}
-          icon={Clock}
-        />
+      <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <MetricCard label="Recruiter Leads" value={leads.filter((lead) => lead.lead_type === "recruiter").length} icon={Users} />
+        <MetricCard label="Investor Leads" value={investors.length} icon={TrendingUp} />
+        <MetricCard label="Active Conversations" value={activeConversations} icon={Clock} />
         <MetricCard
           label="Follow-ups Due Today"
-          value={sampleData.followUpsDue}
+          value={followUpsDue.length}
           icon={AlertCircle}
-          variant={sampleData.followUpsDue > 3 ? "warning" : "default"}
+          variant={followUpsDue.length > 0 ? "warning" : "success"}
         />
-      </div>
-
-      {/* Finance Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <MetricCard
-          label="Monthly Burn"
-          value={`$${sampleData.monthlyBurn.toLocaleString()}`}
-          icon={DollarSign}
-        />
+        <MetricCard label="Meetings Booked" value={meetingsBooked} icon={CheckCircle2} />
+        <MetricCard label="Monthly Burn" value={formatMoney(metrics.monthlyBurn)} icon={DollarSign} />
         <MetricCard
           label="Estimated Runway"
-          value={sampleData.estimatedRunway}
-          variant={parseFloat(sampleData.estimatedRunway) < 6 ? "danger" : "default"}
+          value={metrics.isCashflowPositive ? "Cashflow positive" : `${metrics.runwayMonths.toFixed(1)} months`}
           icon={Zap}
+          variant={!metrics.isCashflowPositive && metrics.runwayMonths < 3 ? "danger" : "default"}
         />
-        <MetricCard
-          label="Meetings Booked"
-          value={sampleData.meetingsBooked}
-          icon={CheckCircle2}
-          trend="up"
-        />
+        <MetricCard label="Current Focus" value="Recruiter validation" subtext="Portfolio proof and investor narrative" />
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Upcoming Meetings */}
-        <div className="lg:col-span-2 bg-white rounded-lg border border-slate-200 p-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">
-            Upcoming Meetings
-          </h2>
-          <div className="space-y-4">
-            {upcomingMeetings.map((meeting) => (
-              <div
-                key={meeting.id}
-                className="flex items-between justify-between border-b border-slate-100 pb-4 last:border-0"
-              >
-                <div className="flex-1">
-                  <p className="font-medium text-slate-900">{meeting.title}</p>
-                  <p className="text-sm text-slate-600 mt-1">
-                    {meeting.time} · {meeting.attendee}
-                  </p>
-                </div>
-                <div>
-                  <StatusBadge status={meeting.status} />
-                </div>
-              </div>
-            ))}
-            <button className="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700">
-              View Calendar
-            </button>
+      <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <section className="rounded-lg border border-slate-200 bg-white p-6 lg:col-span-2">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-slate-950">Today&apos;s Follow-ups</h2>
+            <Link className="text-sm font-medium text-blue-700 hover:underline" href="/outreach">
+              Open outreach
+            </Link>
           </div>
-        </div>
-
-        {/* Week's Top Priorities */}
-        <div className="bg-white rounded-lg border border-slate-200 p-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">
-            This Week's Priorities
-          </h2>
           <div className="space-y-3">
-            {weekTopPriorities.map((priority, idx) => (
-              <div key={priority.id} className="flex gap-3">
-                <span className="text-lg font-bold text-blue-600">
-                  {idx + 1}.
-                </span>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-slate-900">
-                    {priority.title}
-                  </p>
-                  <p className="text-xs text-slate-600 mt-1">
-                    Owner: {priority.owner}
-                  </p>
-                </div>
-              </div>
-            ))}
+            {followUpsDue.length ? (
+              followUpsDue.slice(0, 6).map((item) => (
+                <Link key={item.id} href={item.href} className="flex items-center justify-between rounded-md border border-slate-100 p-3 hover:bg-slate-50">
+                  <div>
+                    <p className="font-medium text-slate-900">{item.name}</p>
+                    <p className="text-sm text-slate-600">{item.context}</p>
+                  </div>
+                  <StatusBadge status={item.status} />
+                </Link>
+              ))
+            ) : (
+              <p className="rounded-md bg-slate-50 p-4 text-sm text-slate-600">No follow-ups due today. Add next follow-up dates in Outreach or Investors.</p>
+            )}
           </div>
-        </div>
+        </section>
+
+        <section className="rounded-lg border border-slate-200 bg-white p-6">
+          <h2 className="mb-4 text-lg font-bold text-slate-950">This Week&apos;s Priorities</h2>
+          {weeklyPlan ? (
+            <div className="space-y-3">
+              <p className="font-semibold text-slate-900">{weeklyPlan.weekly_theme}</p>
+              {weeklyPlan.top_3_priorities.split("\n").map((priority, index) => (
+                <div key={priority} className="flex gap-3 text-sm text-slate-700">
+                  <span className="font-bold text-blue-700">{index + 1}.</span>
+                  <span>{priority}</span>
+                </div>
+              ))}
+              <Link className="inline-flex text-sm font-medium text-blue-700 hover:underline" href="/weekly">
+                Open weekly board
+              </Link>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600">No weekly plan yet.</p>
+          )}
+        </section>
       </div>
 
-      {/* Outreach Pipeline & Risks */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Outreach Pipeline Overview */}
-        <div className="bg-white rounded-lg border border-slate-200 p-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">
-            Outreach Pipeline
-          </h2>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-              <span className="text-sm text-slate-600">New Leads</span>
-              <span className="font-bold text-slate-900">8</span>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <section className="rounded-lg border border-slate-200 bg-white p-6">
+          <h2 className="mb-4 text-lg font-bold text-slate-950">Outreach Pipeline</h2>
+          {["new", "message_generated", "connected", "replied", "meeting_booked"].map((status) => (
+            <div key={status} className="flex items-center justify-between border-b border-slate-100 py-2 text-sm last:border-0">
+              <span className="capitalize text-slate-600">{status.replace(/_/g, " ")}</span>
+              <span className="font-semibold text-slate-900">{leads.filter((lead) => lead.status === status).length}</span>
             </div>
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-              <span className="text-sm text-slate-600">Ready to Send</span>
-              <span className="font-bold text-slate-900">12</span>
-            </div>
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-              <span className="text-sm text-slate-600">Connected</span>
-              <span className="font-bold text-slate-900">15</span>
-            </div>
-            <div className="flex justify-between items-center pb-2">
-              <span className="text-sm text-slate-600">Converted</span>
-              <span className="font-bold text-slate-900">3</span>
-            </div>
-          </div>
-          <button className="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700">
-            View Outreach
-          </button>
-        </div>
+          ))}
+        </section>
 
-        {/* Open Risks */}
-        <div className="bg-white rounded-lg border border-slate-200 p-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">
-            Strategic Risks
-          </h2>
-          <div className="space-y-3">
-            {openRisks.map((risk) => (
-              <div key={risk.id} className="flex gap-3">
-                <AlertCircle
-                  size={16}
-                  className={`flex-shrink-0 mt-0.5 ${
-                    risk.impact === "high"
-                      ? "text-red-600"
-                      : "text-yellow-600"
-                  }`}
-                />
-                <p className="text-sm text-slate-700">{risk.risk}</p>
-              </div>
-            ))}
+        <section className="rounded-lg border border-slate-200 bg-white p-6">
+          <h2 className="mb-4 text-lg font-bold text-slate-950">Finance Snapshot</h2>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-slate-600">Cash</span><span className="font-semibold">{formatMoney(seedFinanceSettings.current_cash_balance)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">Revenue</span><span className="font-semibold">{formatMoney(seedFinanceSettings.monthly_revenue)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">Net burn</span><span className="font-semibold">{formatMoney(metrics.netBurn)}</span></div>
+            <Link className="inline-flex pt-3 text-sm font-medium text-blue-700 hover:underline" href="/finance">Open finance</Link>
           </div>
-          <button className="w-full mt-4 px-4 py-2 bg-slate-100 text-slate-900 rounded-lg font-medium text-sm hover:bg-slate-200">
-            View Details
-          </button>
-        </div>
+        </section>
+
+        <section className="rounded-lg border border-slate-200 bg-white p-6">
+          <h2 className="mb-4 text-lg font-bold text-slate-950">Strategic Risks</h2>
+          <div className="space-y-3">
+            {openRisks.length ? (
+              openRisks.map((risk) => (
+                <div key={risk} className="flex gap-3 text-sm text-slate-700">
+                  <AlertCircle size={16} className="mt-0.5 shrink-0 text-amber-600" />
+                  <span>{risk}</span>
+                </div>
+              ))
+            ) : (
+              <p className="rounded-md bg-slate-50 p-4 text-sm text-slate-600">No critical risks from current seed data.</p>
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );

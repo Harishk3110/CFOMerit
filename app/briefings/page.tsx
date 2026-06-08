@@ -1,388 +1,222 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
+import { Calendar, Copy, DollarSign, MessageSquare, Sparkles, TrendingUp, Users } from "lucide-react";
 import { CopyButton } from "@/components/CopyButton";
-import { Sparkles, Calendar } from "lucide-react";
+import { financeMetrics, formatMoney, generatedWeeklyReview, isDueTodayOrEarlier } from "@/lib/command-center";
+import {
+  seedBriefings,
+  seedCosts,
+  seedFinanceSettings,
+  seedInvestors,
+  seedOutreachLeads,
+  seedTasks,
+} from "@/lib/seed-data";
+import type { AIBriefing } from "@/lib/types";
+import { useLocalRecords } from "@/lib/use-local-records";
 
-const briefingTypes = [
-  {
-    id: "daily",
-    title: "Daily Founder Briefing",
-    description: "What to focus on today",
-    icon: "📅",
-  },
-  {
-    id: "weekly",
-    title: "Weekly Strategy Review",
-    description: "Execution review and next-week plan",
-    icon: "📊",
-  },
-  {
-    id: "investor_prep",
-    title: "Investor Meeting Prep",
-    description: "Background, likely questions, pitch angles",
-    icon: "💼",
-  },
-  {
-    id: "recruiter_prep",
-    title: "Recruiter Meeting Prep",
-    description: "Background, pain points, meeting strategy",
-    icon: "👥",
-  },
-  {
-    id: "finance",
-    title: "Finance Health Report",
-    description: "Burn, runway, cost drivers, risks",
-    icon: "💰",
-  },
-  {
-    id: "outreach",
-    title: "Outreach Performance Review",
-    description: "Leads, pipeline, reply rates, next actions",
-    icon: "📧",
-  },
+const briefingTypes: Array<{ id: AIBriefing["briefing_type"]; title: string; description: string; icon: typeof Calendar }> = [
+  { id: "daily_founder", title: "Daily Founder Briefing", description: "Follow-ups, meetings, finance warnings, and top actions.", icon: Calendar },
+  { id: "weekly_strategy", title: "Weekly Strategy Review", description: "What moved, what did not, and next-week priorities.", icon: TrendingUp },
+  { id: "investor_meeting_prep", title: "Investor Meeting Prep", description: "Investor context, likely questions, risk answers, and ask.", icon: Users },
+  { id: "recruiter_meeting_prep", title: "Recruiter Meeting Prep", description: "Hiring pain, Merit angle, questions, and follow-up.", icon: MessageSquare },
+  { id: "finance_health", title: "Finance Health Report", description: "Burn, runway, cost drivers, and budget risks.", icon: DollarSign },
+  { id: "outreach_performance", title: "Outreach Performance Review", description: "Pipeline state, overdue follow-ups, and next actions.", icon: Copy },
 ];
 
-const sampleBriefings: Record<string, string> = {
-  daily: `DAILY BRIEFING - June 8, 2024
+export default function BriefingsPage() {
+  const briefingsStore = useLocalRecords("merit.ai_briefings", seedBriefings);
+  const leads = useLocalRecords("merit.outreach_leads", seedOutreachLeads).records;
+  const investors = useLocalRecords("merit.investors", seedInvestors).records;
+  const costs = useLocalRecords("merit.costs", seedCosts).records;
+  const tasks = useLocalRecords("merit.tasks", seedTasks).records;
+  const [selected, setSelected] = useState<AIBriefing | null>(briefingsStore.records[0] || null);
 
-Follow-ups Due Today:
-• Alex Park (Accel) - Follow up on investor intro
-• Sarah Chen (TechCorp) - Connection request follow-up
-• Jordan Lee (Startup Interview) - Reschedule call
+  const metrics = financeMetrics(costs, seedFinanceSettings);
 
-Meetings Today:
-• 2:00 PM: Recruiter Call - TechCorp with Sarah Chen
-• 4:30 PM: Slack sync with engineering on blockers
+  const generate = (type: AIBriefing["briefing_type"]) => {
+    const overdueLeads = leads.filter((lead) => isDueTodayOrEarlier(lead.next_follow_up_at));
+    const overdueInvestors = investors.filter((investor) => isDueTodayOrEarlier(investor.next_follow_up_at));
+    const topTasks = tasks.filter((task) => ["this_week", "in_progress", "blocked"].includes(task.status)).slice(0, 5);
+    const highPriorityLeads = leads.filter((lead) => lead.priority_score >= 85).slice(0, 5);
+    const meetingInvestor = investors.find((investor) => investor.status === "meeting_booked") || investors[0];
+    const recruiterLead = leads.find((lead) => lead.lead_type === "recruiter") || leads[0];
+
+    const templates: Record<AIBriefing["briefing_type"], string> = {
+      daily_founder: `Daily Founder Briefing
+
+Follow-ups Due:
+${[...overdueLeads.map((lead) => `- ${lead.first_name} ${lead.last_name}: ${lead.status}`), ...overdueInvestors.map((investor) => `- ${investor.investor_name}: ${investor.status}`)].join("\n") || "- None due today."}
 
 High-Priority Leads:
-• Morgan Lee (Angel, 88/100 score) - Just replied to email
-• Jamie Rodriguez (Recruiter, 72/100 score) - Ready to send message
+${highPriorityLeads.map((lead) => `- ${lead.first_name} ${lead.last_name}, ${lead.company_name}, score ${lead.priority_score}`).join("\n") || "- No high-priority leads yet."}
 
-Finance Alerts:
-• Current runway: 8.2 months (watch if burn exceeds $8.7K this month)
-• No budget warnings
+Finance:
+- Monthly burn: ${formatMoney(metrics.monthlyBurn)}
+- Runway: ${metrics.isCashflowPositive ? "cashflow positive" : `${metrics.runwayMonths.toFixed(1)} months`}
 
 Top Tasks:
-1. Finalize portfolio verification feature (critical blocker)
-2. Prepare investor data room (due by Friday)
-3. Complete 1 recruiter validation call (target: 5 this week)
+${topTasks.map((task) => `- ${task.title} (${task.status})`).join("\n") || "- No active tasks."}
 
 Recommended Actions:
-→ Start day with Alex Park follow-up (highest priority lead)
-→ Prep for 2 PM call with Sarah Chen (recruiter validation)
-→ Unblock engineering on verification feature
-→ Generate investor update for Morgan Lee`,
+- Clear overdue follow-ups first.
+- Keep recruiter validation as the highest-leverage operating priority.
+- Do not add spend unless it improves validation, product quality, or fundraising readiness.`,
+      weekly_strategy: generatedWeeklyReview(tasks),
+      investor_meeting_prep: `Investor Meeting Prep: ${meetingInvestor?.investor_name || "Investor"}
 
-  weekly: `WEEKLY STRATEGY REVIEW - Week of June 1-7
+Background:
+${meetingInvestor?.firm_name || "Unknown firm"} focuses on ${meetingInvestor?.thesis || meetingInvestor?.sector_focus || "early-stage companies"}.
 
-What Moved:
-✓ Portfolio UI redesign shipped (40% faster student signup)
-✓ 4 recruiter validation calls completed (95% positive feedback)
-✓ Investor intro pipeline expanded (8 targets identified)
-✓ AI message generation system working well (80% copy rate)
-
-What Didn't Move:
-✗ Project verification feature still blocked (engineering capacity)
-✗ Student onboarding emails not prioritized
-✗ Accelerator outreach stalled (no one assigned)
-
-Execution Weak Points:
-- Too many parallel initiatives (unfocused effort)
-- Engineering capacity fully saturated
-- Communication delays on blocker resolution
-
-Highest-Leverage Next Actions:
-1. Unblock verification feature (engineering pairing session today)
-2. Close 2 pending investor meetings (already scheduled)
-3. Push recruiter activation to 40% (currently 35%)
-4. Kill non-essential initiatives
-
-Strategic Recommendation:
-Kill all secondary work. Focus singularly on: (1) unblocking verification feature, (2) recruiter validation, (3) investor meetings. You have the momentum. Don't dilute it.`,
-
-  investor_prep: `INVESTOR MEETING PREP - Alex Park (Accel Partners)
-
-About Alex:
-- Partner at Accel, focuses on Future of Work and HR Tech
-- Invested in Notion, Figma, Retool - infrastructure-level companies
-- Active in student/early talent ecosystem
-- Previous founder (sold to Salesforce)
-
-Why They're Relevant:
-- Accel thesis aligns with "proof-of-ability infrastructure"
-- Their portfolio shows infrastructure and platform bets
-- Founder background means they understand founding pain
-- HR tech focus = recruiter evaluation is strategic
+Why Relevant:
+Merit is building proof-of-ability infrastructure for early talent. This fits investors interested in future of work, education, HR tech, SaaS, or marketplace infrastructure.
 
 Likely Questions:
-Q: How is Merit different from LinkedIn, Indeed, Handshake?
-→ Merit is proof-of-ability, not a job board. Students build portfolios of real work. Recruiters evaluate ability directly.
+- How is Merit different from LinkedIn, Handshake, or job boards?
+- What evidence shows recruiters will change workflow?
+- What is the wedge and monetization path?
+- What makes the student supply defensible?
 
-Q: What's your unit economics?
-→ Early stage, validating recruiter willingness to pay. Currently focus on product-market fit.
-
-Q: How will you distribute to recruiters?
-→ Direct outreach to tech companies hiring early talent. Focus on startups first (higher hiring velocity).
-
-Q: Why now?
-→ Recruiting is broken. Traditional resumes are weak signals. Students want to prove ability. Recruiters want real signal.
-
-Your Strongest Angles:
-1. Recruiter pain is real and acute (validation from 4 calls)
-2. Students are ready to build (200+ early signups)
-3. Infrastructure thesis (Accel loves this): you're enabling a new way to discover talent
-4. Founder-friendly positioning (merit, not credentials)
+Strongest Pitch Angle:
+Merit gives recruiters real project evidence and outcomes instead of weak resume signals.
 
 Risks They May Challenge:
-- Competition from LinkedIn/Indeed
-- Unit economics on a free network
-- Recruiter retention and willingness to pay
+${meetingInvestor?.concerns || "Distribution, willingness to pay, and defensibility."}
 
 Suggested Answers:
-→ We're not a job board, we're infrastructure for ability evaluation
-→ Freemium model first (product-market fit), then monetize via recruiter tools
-→ Early validation shows 85%+ recruiter engagement in pilots
-
-The Ask:
-Series Seed lead $500K - $1M
+- Merit is not a job board. It is structured proof of ability.
+- The first wedge is recruiter validation around interns and junior roles.
+- Monetization follows from recruiter workflow value after pilot validation.
 
 Follow-up Ask:
-Warm intros to 3-5 recruiting leaders at tech companies`,
+Ask for warm intros to recruiters hiring interns, juniors, students, or fresh graduates.`,
+      recruiter_meeting_prep: `Recruiter Meeting Prep: ${recruiterLead?.first_name || "Recruiter"} ${recruiterLead?.last_name || ""}
 
-  recruiter_prep: `RECRUITER MEETING PREP - Sarah Chen (Head of Talent, TechCorp)
+Background:
+${recruiterLead?.role_title || "Recruiter"} at ${recruiterLead?.company_name || "target company"}.
 
-About Sarah:
-- Head of Talent at TechCorp (500-person tech company)
-- Responsible for hiring 50+ engineers and designers this year
-- LinkedIn mentions focus on "early career development"
-- Previous HR Manager at Fortune 500
+Likely Hiring Pain:
+${recruiterLead?.pain_angle || "Resume screening is low-signal for early talent and takes too much time."}
 
-Why She's Relevant:
-- TechCorp actively hires entry-level talent
-- Complaining about resume-spam and poor signal from junior candidates
-- Has budget authority (hiring manager)
+Merit Pitch Angle:
+Merit helps recruiters evaluate students through real projects, evidence, outcomes, and proof of ability instead of relying only on resumes.
 
-Hiring Pain Points (Based on Research):
-- Resume screening takes 15+ hours per week
-- Can't distinguish real ability from resume exaggeration
-- "Fresh grad portfolios aren't representative of actual skill"
-- Tech hiring is competitive, needs advantage in sourcing
+Questions to Ask:
+- How do you screen junior candidates today?
+- What makes a student candidate credible?
+- Where do resumes fail in your workflow?
+- Would verified project evidence save time?
 
-Merit's Angle for Sarah:
-"Merit helps you find students with proof of ability. Real projects, real code, real outcomes. No resume exaggeration. 40% faster screening time."
+Suggested Follow-up:
+Offer a short pilot using current open intern or junior roles.`,
+      finance_health: `Finance Health Report
 
-Questions to Ask Sarah:
-1. "How much time do you spend screening entry-level resumes weekly?"
-2. "What signals make you confident a candidate can actually code?"
-3. "How would you use a portfolio of verified student projects?"
-4. "What would save your team the most time in hiring?"
-
-What to Show:
-- 2-3 real student projects from Merit platform
-- Show how recruiters filter by real skills (not degree)
-- Demo the "verify project" feature
-- Timeline to hire is typically 30% faster with Merit
-
-The Ask:
-"Can we try a 4-week pilot with your team? Send us your open roles, and we'll source 10-15 pre-vetted candidates with verified project work."
-
-Follow-up:
-- Weekly sync on pipeline quality
-- Monthly ROI calculation (time saved, quality hires)
-- Expand to other hiring managers if working well`,
-
-  finance: `FINANCE HEALTH REPORT - June 8, 2024
-
-Current Financial Position:
-- Cash Balance: $68,000
-- Monthly Recurring: $1,030
-- Monthly Revenue: $2,000 (pilot partnerships)
-- Net Burn: $1,030/month (actually cash positive!)
-- Estimated Runway: 66 months (if no changes)
-
-Wait, We're Actually Positive?
-Yes! Revenue from pilot partnerships is covering recurring costs. One-time contractor costs ($3,000 in May) created burn, but baseline is positive.
-
-Monthly Cost Breakdown:
-- Hosting (Supabase + Vercel): $400
-- AI/API (OpenAI): $500
-- Design tools: $80
-- Software subscriptions: $100
-- Contractor work: $500/mo average
+Current Position:
+- Cash balance: ${formatMoney(seedFinanceSettings.current_cash_balance)}
+- Monthly revenue: ${formatMoney(seedFinanceSettings.monthly_revenue)}
+- Monthly burn: ${formatMoney(metrics.monthlyBurn)}
+- Net burn: ${metrics.isCashflowPositive ? "cashflow positive" : formatMoney(metrics.netBurn)}
+- Runway: ${metrics.isCashflowPositive ? "cashflow positive" : `${metrics.runwayMonths.toFixed(1)} months`}
 
 Biggest Cost Drivers:
-1. OpenAI API ($500) - Can optimize with better prompting
-2. Contractor design work ($500) - Consider bringing in-house or reducing scope
-3. Hosting ($400) - Well-optimized already
+${costs.sort((a, b) => b.amount - a.amount).slice(0, 5).map((cost) => `- ${cost.vendor}: ${formatMoney(cost.amount)} (${cost.category})`).join("\n")}
 
 Budget Risks:
-- If hiring engineers: +$10K-15K/month
-- If scaling support: +$3K-5K/month
-- Accelerator programs cost: varies
+- AI/API spend can scale quietly if generation volume grows.
+- Contractor spend should stay tied to recruiter-facing product progress.
+
+Suggested Cost Cuts:
+- Batch or reduce low-value AI generations.
+- Delay non-critical design and event costs until recruiter demand improves.
 
 Financial Priorities:
-1. Maintain current efficiency (you're doing well)
-2. Focus on revenue growth (even $500 MRR more = 10% of runway)
-3. Only hire if fundraising is imminent
-4. Keep burn rate discussion visible in investor meetings (shows discipline)
+Keep spend pointed at recruiter validation, proof-of-ability UX, and investor readiness.`,
+      outreach_performance: `Outreach Performance Review
 
-Suggested Cost Optimization:
-- Audit AI API usage (can batch requests, reduce redundant calls)
-- Consider design contractor vs. in-house (trade-off analysis)
-- Negotiate annual commitments for savings`,
-
-  outreach: `OUTREACH PERFORMANCE REVIEW - Week of June 1-7
-
-Overall Pipeline Health:
-Total Leads: 38
-├─ Recruiters: 24 (63%)
-├─ Investors: 8 (21%)
-└─ Other: 6 (16%)
+Total Leads: ${leads.length}
+High-Priority Leads: ${highPriorityLeads.length}
+Overdue Follow-ups: ${overdueLeads.length}
 
 By Status:
-- New: 8 leads (21%)
-- Researched: 5 leads (13%)
-- Message Generated: 12 leads (32%)
-- Connected: 10 leads (26%)
-- Replied: 2 leads (5%)
-- Meeting Booked: 1 lead (3%)
-
-Performance Metrics:
-- Connection acceptance rate: 62%
-- First DM open rate (estimated): 78%
-- Reply rate (so far): 8% (small sample, watch this)
-- Meeting booking rate: 3% of contacted
-
-By Lead Type:
-Recruiter Performance:
-- 24 leads, 15 connected, 2 replied, 1 meeting booked
-- Top performers: TechCorp (Sarah), FinanceHub (Jamie)
-- Signal: Recruiter messaging is resonating
-
-Investor Performance:
-- 8 leads, 4 connected, 1 replied
-- Messaging needs work (too formal, less personal)
-- Suggest: Founder-to-founder angle stronger
-
-High-Priority Leads Needing Action:
-1. Morgan Lee (Angel, 88/100 score) - Just replied, message follow-up needed
-2. Alex Park (Startup founder, 85/100 score) - Ready to send first DM
-3. Sarah Chen (TechCorp, 90/100 score) - Already connected, schedule meeting
-
-Overdue Follow-ups:
-- 5 leads due for follow-up today
-- Jamie Rodriguez (recruiter) - 7 days since connection, no reply
+${Object.entries(leads.reduce<Record<string, number>>((acc, lead) => {
+  acc[lead.status] = (acc[lead.status] || 0) + 1;
+  return acc;
+}, {})).map(([status, count]) => `- ${status}: ${count}`).join("\n")}
 
 Recommended Next Actions:
-→ Increase messaging volume (currently 2-3 per day, target 5-6)
-→ Personalize investor messaging (too templated right now)
-→ Focus on top 10 leads (80/20 rule)
-→ Schedule 3 recruiter meetings for next week
-→ Create follow-up sequence for non-responders`,
-};
+- Work overdue follow-ups before adding new leads.
+- Generate drafts for new or researched leads.
+- Prioritize recruiter and investor leads scoring 85+.
+- Keep all sending manual and use Copy Message only.`,
+    };
 
-export default function BriefingsPage() {
-  const [selectedBriefing, setSelectedBriefing] = useState<string | null>(null);
-  const [generating, setGenerating] = useState(false);
-
-  const handleGenerateBriefing = (briefingId: string) => {
-    setGenerating(true);
-    // Simulate API call
-    setTimeout(() => {
-      setSelectedBriefing(briefingId);
-      setGenerating(false);
-    }, 1000);
+    const record: AIBriefing = {
+      id: `briefing-${crypto.randomUUID()}`,
+      briefing_type: type,
+      briefing_text: templates[type],
+      related_data: { generated_from: "local_records" },
+      created_at: new Date().toISOString(),
+      created_by: "",
+    };
+    briefingsStore.addRecord(record);
+    setSelected(record);
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl">
-      {/* Header */}
+    <div className="max-w-7xl p-6 lg:p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900">AI Briefings</h1>
-        <p className="text-slate-600 mt-1">
-          Generate AI-powered briefings for founders, meetings, and reviews
-        </p>
+        <h1 className="text-3xl font-bold text-slate-950">AI Briefings</h1>
+        <p className="mt-1 text-slate-600">Generate and store copyable operating briefings from current Merit data.</p>
       </div>
 
-      {/* Briefing Types Grid */}
-      {!selectedBriefing ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {briefingTypes.map((type) => (
-            <button
-              key={type.id}
-              onClick={() => handleGenerateBriefing(type.id)}
-              disabled={generating}
-              className="bg-white rounded-lg border border-slate-200 p-6 text-left hover:border-blue-400 hover:shadow-md transition-all disabled:opacity-50"
-            >
-              <div className="text-3xl mb-3">{type.icon}</div>
-              <h3 className="text-lg font-bold text-slate-900">{type.title}</h3>
-              <p className="text-sm text-slate-600 mt-1">{type.description}</p>
-              <div className="mt-4 inline-flex items-center gap-2 text-blue-600 font-medium text-sm">
-                <Sparkles size={16} />
-                Generate
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <section className="lg:col-span-1">
+          <div className="grid gap-3">
+            {briefingTypes.map((type) => {
+              const Icon = type.icon;
+              return (
+                <button key={type.id} onClick={() => generate(type.id)} className="rounded-lg border border-slate-200 bg-white p-4 text-left hover:border-blue-400 hover:bg-blue-50">
+                  <div className="mb-2 flex items-center gap-3">
+                    <Icon size={18} className="text-blue-700" />
+                    <h2 className="font-bold text-slate-950">{type.title}</h2>
+                  </div>
+                  <p className="text-sm text-slate-600">{type.description}</p>
+                  <div className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-blue-700"><Sparkles size={16} /> Generate</div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-slate-200 bg-white lg:col-span-2">
+          {selected ? (
+            <>
+              <div className="border-b border-slate-200 p-6">
+                <h2 className="text-xl font-bold text-slate-950">{briefingTypes.find((type) => type.id === selected.briefing_type)?.title}</h2>
+                <p className="mt-1 text-sm text-slate-600">Saved {new Date(selected.created_at).toLocaleString()}</p>
               </div>
+              <div className="p-6">
+                <textarea value={selected.briefing_text} onChange={(event) => setSelected({ ...selected, briefing_text: event.target.value })} rows={22} className="mb-4 w-full rounded-lg border border-slate-300 bg-slate-50 p-4 text-sm leading-relaxed text-slate-800" />
+                <CopyButton text={selected.briefing_text} label="Copy Briefing" />
+              </div>
+            </>
+          ) : (
+            <p className="p-8 text-center text-sm text-slate-600">Generate a briefing to view it here.</p>
+          )}
+        </section>
+      </div>
+
+      <section className="mt-8 rounded-lg border border-slate-200 bg-white p-6">
+        <h2 className="mb-4 text-lg font-bold text-slate-950">Saved Briefings</h2>
+        <div className="grid gap-2">
+          {briefingsStore.records.map((briefing) => (
+            <button key={briefing.id} onClick={() => setSelected(briefing)} className="flex items-center justify-between rounded-md border border-slate-100 p-3 text-left hover:bg-slate-50">
+              <span className="font-medium text-slate-900">{briefing.briefing_type.replace(/_/g, " ")}</span>
+              <span className="text-xs text-slate-500">{new Date(briefing.created_at).toLocaleDateString()}</span>
             </button>
           ))}
         </div>
-      ) : (
-        <div className="bg-white rounded-lg border border-slate-200">
-          {/* Briefing Header */}
-          <div className="border-b border-slate-200 p-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900">
-                  {briefingTypes.find((b) => b.id === selectedBriefing)?.title}
-                </h2>
-                <p className="text-slate-600 mt-1">
-                  Generated at {new Date().toLocaleTimeString()}
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedBriefing(null)}
-                className="text-slate-400 hover:text-slate-600 text-2xl"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-
-          {/* Briefing Content */}
-          <div className="p-6">
-            <div className="bg-slate-50 rounded-lg p-6 mb-6 border border-slate-200 max-h-96 overflow-auto">
-              <p className="text-slate-700 whitespace-pre-wrap font-mono text-sm leading-relaxed">
-                {sampleBriefings[selectedBriefing] ||
-                  "Briefing content loading..."}
-              </p>
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-4 flex-wrap">
-              <CopyButton
-                text={sampleBriefings[selectedBriefing] || ""}
-                label="Copy Briefing"
-              />
-              <button
-                onClick={() => setSelectedBriefing(null)}
-                className="px-4 py-2 border border-slate-300 rounded-lg font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Back
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Info Box */}
-      <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <h3 className="font-bold text-blue-900 mb-2">ℹ️ About AI Briefings</h3>
-        <p className="text-blue-800">
-          AI Briefings generate concise, actionable summaries of your Merit data.
-          They pull from your outreach pipeline, investor tracking, finance data,
-          and weekly execution board to provide real-time insights. All generated
-          text can be edited and copied to your preferred format.
-        </p>
-      </div>
+      </section>
     </div>
   );
 }
