@@ -3,20 +3,21 @@
 import { useEffect, useState } from "react";
 
 export function useLocalRecords<T extends { id: string }>(key: string, seed: T[]) {
+  const storageKey = `merit.v2.${key}`;
   const [records, setRecords] = useState<T[]>(() => {
     if (typeof window === "undefined") return seed;
     try {
-      const raw = window.localStorage.getItem(key);
+      const raw = window.localStorage.getItem(storageKey);
       return raw ? JSON.parse(raw) : seed;
     } catch (error) {
-      console.warn(`Could not load ${key} from localStorage`, error);
+      console.warn(`Could not load ${storageKey} from localStorage`, error);
       return seed;
     }
   });
 
   useEffect(() => {
-    window.localStorage.setItem(key, JSON.stringify(records));
-  }, [key, records]);
+    window.localStorage.setItem(storageKey, JSON.stringify(records));
+  }, [storageKey, records]);
 
   return {
     records,

@@ -1,32 +1,32 @@
 # Merit Command Center
 
-Internal founder operating system for Merit: outreach tracking, investor relations, finance/runway visibility, weekly execution, and AI briefings.
+Private founder command center for Merit: KPIs, notes, outreach, investors, finance, weekly execution, and AI briefings.
 
-This is not the main Merit product. It is an internal CFO/founder command center for daily operating decisions.
+The app is empty by default. It does not auto-load fake sample leads, investors, costs, tasks, or briefings into the live UI.
 
 ## Stack
 
 - Next.js 16, React 19, TypeScript
-- Tailwind CSS
-- Supabase schema and seed migrations
-- OpenAI API route with deterministic local fallback drafts
-- Recharts
-- lucide-react icons
+- Tailwind CSS dark UI
+- Local browser storage fallback for MVP use
+- Supabase schema migrations for persistence
+- OpenAI API route with local fallback generation
+- Recharts and lucide-react
 
-## Local Setup
+## Run Locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:3000` or the alternate port printed by Next.js.
 
-The app works without environment variables by using browser localStorage and bundled seed data.
+## Data Storage
 
-## Environment Variables
+Without Supabase, records are stored in browser localStorage under `merit.v2.*`.
 
-Create `.env.local` when you want Supabase and OpenAI-backed behavior:
+Optional environment variables:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
@@ -34,41 +34,28 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 OPENAI_API_KEY=sk-...
 ```
 
-If `OPENAI_API_KEY` is missing, the AI route returns local placeholder drafts and reports so the UI does not break.
+If `OPENAI_API_KEY` is missing, the UI still works and uses deterministic local drafts/briefings.
 
-## Supabase
+## Modules
 
-Run the migrations in Supabase SQL Editor or through the Supabase CLI:
+- Dashboard: action list, KPI snapshot, follow-ups, finance, weekly execution, important notes, risks.
+- KPIs: add/edit/delete KPIs, progress bars, filters, search, priority/status sorting.
+- Outreach: add/edit/delete leads, notes, statuses, follow-up dates, editable message drafts, Copy Message only.
+- Investors: add/edit/delete investors, meeting notes, concerns, next steps, outreach draft, meeting brief.
+- Finance: add/edit/delete costs, editable finance settings, burn/runway calculations, CSV export.
+- Weekly Execution: create/edit/delete weekly plan, add/edit/delete tasks, move statuses.
+- AI Briefings: generate/add/edit/delete/copy briefings from current local data.
+- Notes: add/edit/delete/pin founder notes with search and filters.
+- Settings: editable company context and local data reset.
+
+## Supabase Migrations
+
+Run these migrations in order:
 
 - `supabase/migrations/001_initial_schema.sql`
-- `supabase/migrations/002_seed_command_center_data.sql`
+- `supabase/migrations/003_kpis_notes_company_settings.sql`
 
-Tables included:
-
-- `command_center_profiles`
-- `outreach_leads`
-- `outreach_messages`
-- `outreach_events`
-- `investors`
-- `investor_interactions`
-- `investor_updates`
-- `costs`
-- `finance_settings`
-- `weekly_plans`
-- `tasks`
-- `ai_briefings`
-
-RLS statements are prepared as comments in the initial migration. Enable them when Supabase auth is configured.
-
-## MVP Pages
-
-- Dashboard: today follow-ups, pipeline status, finance snapshot, weekly priorities, risks.
-- Outreach: manual lead creation, filters/search, reusable scoring, editable generated drafts, Copy Message buttons, manual sent status, follow-up dates.
-- Investors: pipeline board, investor creation, status/notes/concerns/follow-up edits, copyable outreach, investor update generator.
-- Finance: cost creation/deletion, category/vendor filters, runway and burn calculations, charts, CSV export.
-- Weekly Execution: editable weekly plan, kanban task board, task creation, status movement, copyable weekly review.
-- AI Briefings: daily, weekly, investor prep, recruiter prep, finance health, and outreach performance briefings stored locally.
-- Settings: Merit context, environment variable guide, compliance notes, local seed reset.
+There is no live seed migration. The app starts empty unless you add data manually.
 
 ## Compliance
 
@@ -76,14 +63,14 @@ RLS statements are prepared as comments in the initial migration. Enable them wh
 - No LinkedIn auto-connect.
 - No LinkedIn scraping.
 - No LinkedIn passwords, cookies, sessions, tokens, or account access.
-- Every outreach draft uses Copy Message, not Send.
-- Founders manually send all LinkedIn messages.
-- Personalization is based only on professional context entered by the user.
-- No fake integrations or broken external-send buttons.
+- Outreach uses Copy Message buttons only.
+- Founder manually sends every LinkedIn message.
+- No fake external integrations.
 
 ## Verification
 
 ```bash
 npm run lint
+npx tsc --noEmit
 npm run build
 ```

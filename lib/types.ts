@@ -186,5 +186,51 @@ export interface AIBriefing {
   briefing_text: string;
   related_data?: Record<string, unknown>;
   created_at: string;
+  updated_at?: string;
   created_by: string;
+}
+
+export interface KPI {
+  id: string;
+  title: string;
+  category: "users" | "recruiters" | "investors" | "outreach" | "revenue" | "product" | "partnerships" | "finance" | "execution" | "other";
+  target_value: number;
+  current_value: number;
+  unit: string;
+  period: "daily" | "weekly" | "monthly" | "quarterly";
+  owner: string;
+  status: "on_track" | "at_risk" | "behind" | "achieved" | "paused";
+  priority: "low" | "medium" | "high" | "critical";
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FounderNote {
+  id: string;
+  title: string;
+  content: string;
+  category: "general" | "outreach" | "investor" | "finance" | "product" | "strategy" | "meeting" | "personal reminder";
+  linked_lead_id?: string;
+  linked_investor_id?: string;
+  linked_task_id?: string;
+  priority: "low" | "medium" | "high" | "critical";
+  status: "open" | "in_progress" | "done" | "archived";
+  pinned: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompanySettings {
+  id: string;
+  company_name: string;
+  company_description: string;
+  current_stage: string;
+  core_problem: string;
+  core_solution: string;
+  target_users: string;
+  current_strategic_focus: string;
+  default_currency: string;
+  created_at: string;
+  updated_at: string;
 }

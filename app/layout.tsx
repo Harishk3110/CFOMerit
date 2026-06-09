@@ -28,7 +28,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-screen bg-slate-50">
+      <body className="min-h-screen bg-slate-950 text-slate-100">
         <Sidebar />
         <main className="lg:ml-64 pt-16 lg:pt-0">{children}</main>
       </body>

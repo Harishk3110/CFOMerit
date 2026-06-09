@@ -1,172 +1,175 @@
 "use client";
 
 import Link from "next/link";
-import { AlertCircle, CheckCircle2, Clock, DollarSign, TrendingUp, Users, Zap } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, DollarSign, ListChecks, TrendingUp, Users } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { StatusBadge } from "@/components/StatusBadge";
-import { financeMetrics, formatMoney, isDueTodayOrEarlier } from "@/lib/command-center";
-import {
-  seedCosts,
-  seedFinanceSettings,
-  seedInvestors,
-  seedOutreachLeads,
-  seedTasks,
-  seedWeeklyPlans,
-} from "@/lib/seed-data";
+import { emptyFinanceSettings, financeMetrics, formatMoney, isDueTodayOrEarlier, kpiProgress } from "@/lib/command-center";
+import type { Cost, FinanceSettings, FounderNote, Investor, KPI, OutreachLead, Task, WeeklyPlan } from "@/lib/types";
 import { useLocalRecords } from "@/lib/use-local-records";
 
 export default function DashboardPage() {
-  const leads = useLocalRecords("merit.outreach_leads", seedOutreachLeads).records;
-  const investors = useLocalRecords("merit.investors", seedInvestors).records;
-  const costs = useLocalRecords("merit.costs", seedCosts).records;
-  const tasks = useLocalRecords("merit.tasks", seedTasks).records;
-  const weeklyPlans = useLocalRecords("merit.weekly_plans", seedWeeklyPlans).records;
+  const kpis = useLocalRecords<KPI>("kpis", []).records;
+  const leads = useLocalRecords<OutreachLead>("outreach_leads", []).records;
+  const investors = useLocalRecords<Investor>("investors", []).records;
+  const costs = useLocalRecords<Cost>("costs", []).records;
+  const financeSettings = useLocalRecords<FinanceSettings>("finance_settings", [emptyFinanceSettings()]).records[0] || emptyFinanceSettings();
+  const tasks = useLocalRecords<Task>("tasks", []).records;
+  const weeklyPlans = useLocalRecords<WeeklyPlan>("weekly_plans", []).records;
+  const notes = useLocalRecords<FounderNote>("founder_notes", []).records;
 
-  const metrics = financeMetrics(costs, seedFinanceSettings);
-  const followUpsDue = [
-    ...leads
-      .filter((lead) => isDueTodayOrEarlier(lead.next_follow_up_at))
-      .map((lead) => ({
-        id: lead.id,
-        name: `${lead.first_name} ${lead.last_name}`,
-        context: `${lead.role_title} at ${lead.company_name}`,
-        href: "/outreach",
-        status: lead.status,
-      })),
-    ...investors
-      .filter((investor) => isDueTodayOrEarlier(investor.next_follow_up_at))
-      .map((investor) => ({
-        id: investor.id,
-        name: investor.investor_name,
-        context: investor.firm_name || investor.investor_type,
-        href: "/investors",
-        status: investor.status,
-      })),
-  ];
-  const activeConversations = leads.filter((lead) =>
-    ["connected", "first_dm_sent", "follow_up_1_sent", "follow_up_2_sent", "replied", "meeting_booked"].includes(lead.status)
+  const finance = financeMetrics(costs, financeSettings);
+  const dueLeads = leads.filter((lead) => isDueTodayOrEarlier(lead.next_follow_up_at));
+  const dueInvestors = investors.filter((investor) => isDueTodayOrEarlier(investor.next_follow_up_at));
+  const activeInvestorConversations = investors.filter((investor) =>
+    ["contacted", "replied", "meeting_booked", "first_meeting_done", "follow_up_sent", "diligence", "soft_commit"].includes(investor.status)
   ).length;
   const meetingsBooked =
     leads.filter((lead) => lead.status === "meeting_booked").length +
     investors.filter((investor) => investor.status === "meeting_booked").length;
-  const weeklyPlan = weeklyPlans[0];
-  const openRisks = [
-    metrics.runwayMonths < 3 ? "Runway below 3 months. Cut spend or accelerate revenue now." : null,
-    tasks.some((task) => task.status === "blocked") ? "Critical work is blocked on the weekly execution board." : null,
-    leads.filter((lead) => lead.status === "new").length > 3 ? "New outreach leads are piling up without message generation." : null,
+  const openTasks = tasks.filter((task) => !["done", "killed"].includes(task.status));
+  const blockedTasks = tasks.filter((task) => task.status === "blocked");
+  const criticalKpis = kpis.filter((kpi) => kpi.priority === "critical");
+  const weeklyProgress = kpis.filter((kpi) => kpi.period === "weekly");
+  const weeklyAverage = weeklyProgress.length
+    ? Math.round(weeklyProgress.reduce((sum, kpi) => sum + kpiProgress(kpi), 0) / weeklyProgress.length)
+    : 0;
+  const pinnedNotes = notes.filter((note) => note.pinned && note.status !== "archived").slice(0, 5);
+  const currentPlan = weeklyPlans[0];
+
+  const actions = [
+    dueLeads.length ? `Follow up with ${dueLeads.length} outreach lead(s).` : null,
+    dueInvestors.length ? `Follow up with ${dueInvestors.length} investor(s).` : null,
+    blockedTasks.length ? `Unblock ${blockedTasks.length} blocked task(s).` : null,
+    kpis.some((kpi) => kpi.status === "behind") ? "Review behind KPIs and decide what gets cut or fixed." : null,
+    !kpis.length && !leads.length && !investors.length && !costs.length ? "Add your first KPI, lead, investor, cost, or weekly plan to start operating from this dashboard." : null,
   ].filter(Boolean) as string[];
 
   return (
     <div className="max-w-7xl p-6 lg:p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-950">Dashboard</h1>
-        <p className="mt-1 text-slate-600">What do we need to do today to move Merit forward?</p>
+        <h1 className="text-3xl font-bold text-white">Founder Command Center</h1>
+        <p className="mt-1 text-slate-400">What do I need to do today to move Merit forward?</p>
       </div>
 
-      <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Recruiter Leads" value={leads.filter((lead) => lead.lead_type === "recruiter").length} icon={Users} />
-        <MetricCard label="Investor Leads" value={investors.length} icon={TrendingUp} />
-        <MetricCard label="Active Conversations" value={activeConversations} icon={Clock} />
-        <MetricCard
-          label="Follow-ups Due Today"
-          value={followUpsDue.length}
-          icon={AlertCircle}
-          variant={followUpsDue.length > 0 ? "warning" : "success"}
-        />
+      <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <MetricCard label="Total KPIs" value={kpis.length} icon={ListChecks} />
+        <MetricCard label="KPIs Behind" value={kpis.filter((kpi) => kpi.status === "behind").length} icon={AlertCircle} variant={kpis.some((kpi) => kpi.status === "behind") ? "danger" : "default"} />
+        <MetricCard label="Outreach Leads" value={leads.length} icon={Users} />
+        <MetricCard label="Follow-ups Due" value={dueLeads.length + dueInvestors.length} icon={Clock} variant={dueLeads.length + dueInvestors.length ? "warning" : "default"} />
+        <MetricCard label="Investor Conversations" value={activeInvestorConversations} icon={TrendingUp} />
         <MetricCard label="Meetings Booked" value={meetingsBooked} icon={CheckCircle2} />
-        <MetricCard label="Monthly Burn" value={formatMoney(metrics.monthlyBurn)} icon={DollarSign} />
-        <MetricCard
-          label="Estimated Runway"
-          value={metrics.isCashflowPositive ? "Cashflow positive" : `${metrics.runwayMonths.toFixed(1)} months`}
-          icon={Zap}
-          variant={!metrics.isCashflowPositive && metrics.runwayMonths < 3 ? "danger" : "default"}
-        />
-        <MetricCard label="Current Focus" value="Recruiter validation" subtext="Portfolio proof and investor narrative" />
+        <MetricCard label="Monthly Burn" value={formatMoney(finance.monthlyBurn, financeSettings.currency)} icon={DollarSign} />
+        <MetricCard label="Runway" value={finance.isCashflowPositive ? "Cashflow positive" : finance.runwayMonths ? `${finance.runwayMonths.toFixed(1)} mo` : "No data"} />
+        <MetricCard label="Open Tasks" value={openTasks.length} />
+        <MetricCard label="Blocked Tasks" value={blockedTasks.length} variant={blockedTasks.length ? "danger" : "default"} />
       </div>
 
-      <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <section className="rounded-lg border border-slate-200 bg-white p-6 lg:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-slate-950">Today&apos;s Follow-ups</h2>
-            <Link className="text-sm font-medium text-blue-700 hover:underline" href="/outreach">
-              Open outreach
-            </Link>
-          </div>
-          <div className="space-y-3">
-            {followUpsDue.length ? (
-              followUpsDue.slice(0, 6).map((item) => (
-                <Link key={item.id} href={item.href} className="flex items-center justify-between rounded-md border border-slate-100 p-3 hover:bg-slate-50">
-                  <div>
-                    <p className="font-medium text-slate-900">{item.name}</p>
-                    <p className="text-sm text-slate-600">{item.context}</p>
-                  </div>
-                  <StatusBadge status={item.status} />
-                </Link>
-              ))
-            ) : (
-              <p className="rounded-md bg-slate-50 p-4 text-sm text-slate-600">No follow-ups due today. Add next follow-up dates in Outreach or Investors.</p>
-            )}
-          </div>
-        </section>
-
-        <section className="rounded-lg border border-slate-200 bg-white p-6">
-          <h2 className="mb-4 text-lg font-bold text-slate-950">This Week&apos;s Priorities</h2>
-          {weeklyPlan ? (
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <Panel title="Today's Action List" href="/weekly" linkLabel="Open execution">
+          {actions.length ? (
             <div className="space-y-3">
-              <p className="font-semibold text-slate-900">{weeklyPlan.weekly_theme}</p>
-              {weeklyPlan.top_3_priorities.split("\n").map((priority, index) => (
-                <div key={priority} className="flex gap-3 text-sm text-slate-700">
-                  <span className="font-bold text-blue-700">{index + 1}.</span>
-                  <span>{priority}</span>
-                </div>
+              {actions.map((action) => (
+                <div key={action} className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-sm text-slate-200">{action}</div>
               ))}
-              <Link className="inline-flex text-sm font-medium text-blue-700 hover:underline" href="/weekly">
-                Open weekly board
-              </Link>
             </div>
           ) : (
-            <p className="text-sm text-slate-600">No weekly plan yet.</p>
+            <Empty text="No urgent actions from current data." />
           )}
-        </section>
-      </div>
+        </Panel>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <section className="rounded-lg border border-slate-200 bg-white p-6">
-          <h2 className="mb-4 text-lg font-bold text-slate-950">Outreach Pipeline</h2>
-          {["new", "message_generated", "connected", "replied", "meeting_booked"].map((status) => (
-            <div key={status} className="flex items-center justify-between border-b border-slate-100 py-2 text-sm last:border-0">
-              <span className="capitalize text-slate-600">{status.replace(/_/g, " ")}</span>
-              <span className="font-semibold text-slate-900">{leads.filter((lead) => lead.status === status).length}</span>
+        <Panel title="KPI Snapshot" href="/kpis" linkLabel="Manage KPIs">
+          {kpis.length ? (
+            <div className="space-y-3">
+              <Row label="On track" value={kpis.filter((kpi) => kpi.status === "on_track").length} />
+              <Row label="At risk" value={kpis.filter((kpi) => kpi.status === "at_risk").length} />
+              <Row label="Behind" value={kpis.filter((kpi) => kpi.status === "behind").length} />
+              <Row label="Critical" value={criticalKpis.length} />
+              <Row label="Weekly progress" value={`${weeklyAverage}%`} />
             </div>
-          ))}
-        </section>
+          ) : (
+            <Empty text="No KPIs tracked yet. Add your first KPI." />
+          )}
+        </Panel>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-6">
-          <h2 className="mb-4 text-lg font-bold text-slate-950">Finance Snapshot</h2>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-slate-600">Cash</span><span className="font-semibold">{formatMoney(seedFinanceSettings.current_cash_balance)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-600">Revenue</span><span className="font-semibold">{formatMoney(seedFinanceSettings.monthly_revenue)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-600">Net burn</span><span className="font-semibold">{formatMoney(metrics.netBurn)}</span></div>
-            <Link className="inline-flex pt-3 text-sm font-medium text-blue-700 hover:underline" href="/finance">Open finance</Link>
-          </div>
-        </section>
+        <Panel title="Finance Snapshot" href="/finance" linkLabel="Open finance">
+          {costs.length || financeSettings.current_cash_balance ? (
+            <div className="space-y-3">
+              <Row label="Cash balance" value={formatMoney(financeSettings.current_cash_balance, financeSettings.currency)} />
+              <Row label="Monthly revenue" value={formatMoney(financeSettings.monthly_revenue, financeSettings.currency)} />
+              <Row label="Monthly burn" value={formatMoney(finance.monthlyBurn, financeSettings.currency)} />
+              <Row label="Runway" value={finance.isCashflowPositive ? "Cashflow positive" : `${finance.runwayMonths.toFixed(1)} months`} />
+            </div>
+          ) : (
+            <Empty text="No costs tracked yet. Add your first cost to calculate burn and runway." />
+          )}
+        </Panel>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-6">
-          <h2 className="mb-4 text-lg font-bold text-slate-950">Strategic Risks</h2>
-          <div className="space-y-3">
-            {openRisks.length ? (
-              openRisks.map((risk) => (
-                <div key={risk} className="flex gap-3 text-sm text-slate-700">
-                  <AlertCircle size={16} className="mt-0.5 shrink-0 text-amber-600" />
-                  <span>{risk}</span>
-                </div>
-              ))
-            ) : (
-              <p className="rounded-md bg-slate-50 p-4 text-sm text-slate-600">No critical risks from current seed data.</p>
-            )}
-          </div>
-        </section>
+        <Panel title="Outreach Follow-ups Due" href="/outreach" linkLabel="Open outreach">
+          {dueLeads.length ? dueLeads.slice(0, 5).map((lead) => (
+            <Item key={lead.id} title={`${lead.first_name} ${lead.last_name}`} meta={`${lead.company_name} - ${lead.role_title}`} status={lead.status} />
+          )) : <Empty text="No outreach follow-ups due." />}
+        </Panel>
+
+        <Panel title="Investor Follow-ups Due" href="/investors" linkLabel="Open investors">
+          {dueInvestors.length ? dueInvestors.slice(0, 5).map((investor) => (
+            <Item key={investor.id} title={investor.investor_name} meta={investor.firm_name || investor.investor_type} status={investor.status} />
+          )) : <Empty text="No investor follow-ups due." />}
+        </Panel>
+
+        <Panel title="Weekly Execution" href="/weekly" linkLabel="Open board">
+          {currentPlan || tasks.length ? (
+            <div className="space-y-3">
+              {currentPlan && <Item title={currentPlan.weekly_theme || "Weekly plan"} meta={currentPlan.key_metric_target || "No metric target set"} status={currentPlan.status} />}
+              <Row label="Open tasks" value={openTasks.length} />
+              <Row label="Blocked" value={blockedTasks.length} />
+            </div>
+          ) : (
+            <Empty text="No weekly plan yet. Create this week's operating plan." />
+          )}
+        </Panel>
+
+        <Panel title="Important Notes" href="/notes" linkLabel="Open notes">
+          {pinnedNotes.length ? pinnedNotes.map((note) => (
+            <Item key={note.id} title={note.title} meta={note.category} status={note.priority} />
+          )) : <Empty text="No important notes pinned yet." />}
+        </Panel>
+
+        <Panel title="Risks / Blockers" href="/weekly" linkLabel="Review blockers">
+          {blockedTasks.length || kpis.some((kpi) => ["behind", "at_risk"].includes(kpi.status)) ? (
+            <div className="space-y-3">
+              {blockedTasks.slice(0, 3).map((task) => <Item key={task.id} title={task.title} meta={task.owner} status="blocked" />)}
+              {kpis.filter((kpi) => ["behind", "at_risk"].includes(kpi.status)).slice(0, 3).map((kpi) => <Item key={kpi.id} title={kpi.title} meta={`${kpi.current_value}/${kpi.target_value} ${kpi.unit}`} status={kpi.status} />)}
+            </div>
+          ) : (
+            <Empty text="No risks or blockers tracked yet." />
+          )}
+        </Panel>
       </div>
     </div>
   );
+}
+
+function Panel({ title, children, href, linkLabel }: { title: string; children: React.ReactNode; href: string; linkLabel: string }) {
+  return (
+    <section className="rounded-lg border border-slate-800 bg-slate-900 p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="font-semibold text-white">{title}</h2>
+        <Link href={href} className="text-xs font-medium text-blue-400 hover:text-blue-300">{linkLabel}</Link>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string | number }) {
+  return <div className="flex justify-between border-b border-slate-800 pb-2 text-sm last:border-0"><span className="text-slate-400">{label}</span><span className="font-semibold text-slate-100">{value}</span></div>;
+}
+
+function Item({ title, meta, status }: { title: string; meta: string; status: string }) {
+  return <div className="rounded-lg border border-slate-800 bg-slate-950 p-3"><div className="flex items-start justify-between gap-3"><div><p className="font-medium text-slate-100">{title}</p><p className="mt-1 text-xs text-slate-500">{meta}</p></div><StatusBadge status={status} /></div></div>;
+}
+
+function Empty({ text }: { text: string }) {
+  return <p className="rounded-lg border border-dashed border-slate-800 bg-slate-950 p-4 text-sm text-slate-500">{text}</p>;
 }

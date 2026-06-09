@@ -1,58 +1,37 @@
 "use client";
 
-import React from "react";
-
 interface StatusBadgeProps {
   status: string;
   variant?: "default" | "success" | "warning" | "danger" | "info";
 }
 
 export function StatusBadge({ status, variant = "default" }: StatusBadgeProps) {
-  const getColors = (v: string) => {
-    const colorMap: Record<string, { bg: string; text: string }> = {
-      default: { bg: "bg-slate-100", text: "text-slate-800" },
-      success: { bg: "bg-green-100", text: "text-green-800" },
-      warning: { bg: "bg-yellow-100", text: "text-yellow-800" },
-      danger: { bg: "bg-red-100", text: "text-red-800" },
-      info: { bg: "bg-blue-100", text: "text-blue-800" },
-    };
-    return colorMap[v] || colorMap.default;
-  };
-
-  // Auto-detect variant based on status
+  const statusLower = status.toLowerCase();
   let autoVariant = variant;
-  if (!variant || variant === "default") {
-    const statusLower = status.toLowerCase();
-    if (
-      statusLower.includes("connected") ||
-      statusLower.includes("converted") ||
-      statusLower.includes("committed") ||
-      statusLower.includes("done")
-    ) {
+
+  if (variant === "default") {
+    if (["achieved", "on_track", "connected", "converted", "committed", "done"].some((term) => statusLower.includes(term))) {
       autoVariant = "success";
-    } else if (
-      statusLower.includes("interested") ||
-      statusLower.includes("dead") ||
-      statusLower.includes("killed")
-    ) {
-      autoVariant = "danger";
-    } else if (
-      statusLower.includes("follow") ||
-      statusLower.includes("diligence")
-    ) {
+    } else if (["at_risk", "follow", "diligence", "in_progress", "this_week"].some((term) => statusLower.includes(term))) {
       autoVariant = "warning";
-    } else if (statusLower.includes("draft") || statusLower.includes("backlog")) {
+    } else if (["behind", "dead", "killed", "blocked", "critical", "not_interested"].some((term) => statusLower.includes(term))) {
+      autoVariant = "danger";
+    } else if (["draft", "backlog", "new", "target"].some((term) => statusLower.includes(term))) {
       autoVariant = "info";
     }
   }
 
-  const colors = getColors(autoVariant);
+  const colorMap: Record<string, string> = {
+    default: "border-slate-700 bg-slate-800 text-slate-200",
+    success: "border-emerald-800 bg-emerald-950/70 text-emerald-300",
+    warning: "border-amber-800 bg-amber-950/70 text-amber-300",
+    danger: "border-red-800 bg-red-950/70 text-red-300",
+    info: "border-blue-800 bg-blue-950/70 text-blue-300",
+  };
 
   return (
-    <span
-      className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text}`}
-    >
-      {status}
+    <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${colorMap[autoVariant]}`}>
+      {status.replace(/_/g, " ")}
     </span>
   );
 }

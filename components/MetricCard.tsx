@@ -20,10 +20,10 @@ export function MetricCard({
   trend,
 }: MetricCardProps) {
   const colorMap: Record<NonNullable<MetricCardProps["variant"]>, string> = {
-    default: "border-slate-200 bg-white text-slate-950",
-    warning: "border-amber-200 bg-amber-50 text-amber-950",
-    danger: "border-red-200 bg-red-50 text-red-950",
-    success: "border-green-200 bg-green-50 text-green-950",
+    default: "border-slate-800 bg-slate-900 text-slate-100",
+    warning: "border-amber-900 bg-amber-950/40 text-amber-100",
+    danger: "border-red-900 bg-red-950/40 text-red-100",
+    success: "border-emerald-900 bg-emerald-950/40 text-emerald-100",
   };
 
   return (

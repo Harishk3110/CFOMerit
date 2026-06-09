@@ -12,15 +12,19 @@ import {
   Settings,
   Menu,
   X,
+  BarChart3,
+  NotebookText,
 } from "lucide-react";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
+  { name: "KPIs", href: "/kpis", icon: BarChart3 },
   { name: "Outreach", href: "/outreach", icon: Users },
   { name: "Investors", href: "/investors", icon: TrendingUp },
   { name: "Finance", href: "/finance", icon: DollarSign },
   { name: "Weekly Execution", href: "/weekly", icon: Zap },
   { name: "AI Briefings", href: "/briefings", icon: LayoutDashboard },
+  { name: "Notes", href: "/notes", icon: NotebookText },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
@@ -40,11 +44,11 @@ export function Sidebar() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 h-screen w-64 bg-slate-900 text-white transition-transform duration-300 z-40 ${
+        className={`fixed left-0 top-0 h-screen w-64 bg-black text-white transition-transform duration-300 z-40 border-r border-slate-800 ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
-        <div className="p-6 border-b border-slate-700">
+        <div className="p-6 border-b border-slate-800">
           <h1 className="text-2xl font-bold">Merit</h1>
           <p className="text-xs text-slate-400 mt-1">Command Center</p>
         </div>
@@ -60,8 +64,8 @@ export function Sidebar() {
                 onClick={() => setIsOpen(false)}
                 className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 transition-colors ${
                   isActive
-                    ? "bg-blue-600 text-white"
-                    : "text-slate-300 hover:bg-slate-800"
+                      ? "bg-blue-600 text-white"
+                      : "text-slate-400 hover:bg-slate-900 hover:text-slate-100"
                 }`}
               >
                 <Icon size={20} />
@@ -71,7 +75,7 @@ export function Sidebar() {
           })}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-slate-700 bg-slate-950">
+        <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-slate-800 bg-slate-950">
           <p className="text-xs text-slate-400">
             Built for Merit founders. MVP v1.
           </p>

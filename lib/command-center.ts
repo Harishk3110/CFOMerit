@@ -1,4 +1,4 @@
-import type { Cost, FinanceSettings, Investor, OutreachLead, Task } from "./types";
+import type { Cost, FinanceSettings, Investor, KPI, OutreachLead, Task } from "./types";
 
 export function formatMoney(value: number, currency = "USD") {
   return new Intl.NumberFormat("en-US", {
@@ -154,4 +154,24 @@ Highest-Leverage Next Actions:
 
 Strategic Recommendation:
 Keep the week narrow. Proof-of-ability only matters if recruiters see a faster, clearer hiring signal, so prioritize recruiter validation and the verification workflow.`;
+}
+
+export function kpiProgress(kpi: Pick<KPI, "current_value" | "target_value">) {
+  if (!kpi.target_value || kpi.target_value <= 0) return 0;
+  return Math.min(100, Math.max(0, (kpi.current_value / kpi.target_value) * 100));
+}
+
+export function emptyFinanceSettings(): FinanceSettings {
+  const now = new Date().toISOString();
+  return {
+    id: "finance-settings",
+    current_cash_balance: 0,
+    monthly_revenue: 0,
+    expected_monthly_revenue: 0,
+    target_monthly_budget: 0,
+    currency: "USD",
+    created_at: now,
+    updated_at: now,
+    created_by: "",
+  };
 }

@@ -376,7 +376,8 @@ Next Month: ${input.nextMonthGoals || "Scale recruiter pilot and improve student
   };
 }
 
-function generateFallbackWeeklyReview() {
+function generateFallbackWeeklyReview(input?: WeeklyReviewInput) {
+  void input;
   return {
     review: `What Moved: Focus areas were executed. Made progress on key initiatives.
 

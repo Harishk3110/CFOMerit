@@ -26,8 +26,8 @@ export function CopyButton({ text, label = "Copy" }: CopyButtonProps) {
       onClick={handleCopy}
       className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
         copied
-          ? "bg-green-100 text-green-800"
-          : "bg-slate-100 text-slate-800 hover:bg-slate-200"
+          ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
+          : "bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700"
       }`}
     >
       {copied ? <Check size={16} /> : <Copy size={16} />}
