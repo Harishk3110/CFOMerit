@@ -3,8 +3,8 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Edit, Plus, Search, Trash2 } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
-import { kpiProgress } from "@/lib/command-center";
-import type { KPI } from "@/lib/types";
+import { autoKpiStatus, kpiProgress, meritKpiTemplates } from "@/lib/command-center";
+import type { KPI, OperatingTrack } from "@/lib/types";
 import { useLocalRecords } from "@/lib/use-local-records";
 
 const categories: KPI["category"][] = ["users", "recruiters", "investors", "outreach", "revenue", "product", "partnerships", "finance", "execution", "other"];
@@ -25,7 +25,10 @@ const emptyKpi = (): KPI => {
     period: "weekly",
     owner: "",
     status: "on_track",
+    manual_status_override: false,
     priority: "medium",
+    operating_track_id: "",
+    progress_history: [],
     notes: "",
     created_at: now,
     updated_at: now,
@@ -34,6 +37,7 @@ const emptyKpi = (): KPI => {
 
 export default function KPIsPage() {
   const store = useLocalRecords<KPI>("kpis", []);
+  const tracks = useLocalRecords<OperatingTrack>("operating_tracks", []).records;
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -60,7 +64,8 @@ export default function KPIsPage() {
     event.preventDefault();
     if (!editing) return;
     const data = new FormData(event.currentTarget);
-    const record: KPI = {
+    const manual = data.get("manual_status_override") === "on";
+    const baseRecord: KPI = {
       ...editing,
       title: String(data.get("title") || ""),
       category: String(data.get("category")) as KPI["category"],
@@ -70,10 +75,14 @@ export default function KPIsPage() {
       period: String(data.get("period")) as KPI["period"],
       owner: String(data.get("owner") || ""),
       status: String(data.get("status")) as KPI["status"],
+      manual_status_override: manual,
       priority: String(data.get("priority")) as KPI["priority"],
+      operating_track_id: String(data.get("operating_track_id") || ""),
+      progress_history: [...(editing.progress_history || []), { date: new Date().toISOString().slice(0, 10), value: Number(data.get("current_value") || 0) }].slice(-12),
       notes: String(data.get("notes") || ""),
       updated_at: new Date().toISOString(),
     };
+    const record: KPI = { ...baseRecord, status: autoKpiStatus(baseRecord) };
     if (store.records.some((kpi) => kpi.id === record.id)) {
       store.updateRecord(record.id, record);
     } else {
@@ -86,6 +95,32 @@ export default function KPIsPage() {
     if (window.confirm(`Delete KPI "${kpi.title}"?`)) store.deleteRecord(kpi.id);
   };
 
+  const loadTemplates = () => {
+    const now = new Date().toISOString();
+    const existing = new Set(store.records.map((kpi) => kpi.title));
+    const records = meritKpiTemplates
+      .filter((template) => !existing.has(template.title))
+      .map<KPI>((template) => ({
+        id: `kpi-${crypto.randomUUID()}`,
+        title: template.title,
+        category: template.category,
+        target_value: template.target_value,
+        current_value: 0,
+        unit: template.unit,
+        period: template.period as KPI["period"],
+        owner: "Founder",
+        status: "behind",
+        manual_status_override: false,
+        priority: template.priority as KPI["priority"],
+        operating_track_id: tracks.find((track) => track.name === template.trackName)?.id || "",
+        progress_history: [],
+        notes: template.notes,
+        created_at: now,
+        updated_at: now,
+      }));
+    store.setRecords((current) => [...records, ...current]);
+  };
+
   return (
     <div className="max-w-7xl p-6 lg:p-8">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
@@ -93,9 +128,12 @@ export default function KPIsPage() {
           <h1 className="text-3xl font-bold text-white">KPIs</h1>
           <p className="mt-1 text-slate-400">Founder operating metrics for Merit.</p>
         </div>
-        <button onClick={() => setEditing(emptyKpi())} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500">
-          <Plus size={18} /> Add KPI
-        </button>
+        <div className="flex gap-3">
+          <button onClick={loadTemplates} className="rounded-lg border border-slate-700 px-4 py-2 font-medium text-slate-200 hover:bg-slate-900">Load Merit KPI Templates</button>
+          <button onClick={() => setEditing(emptyKpi())} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500">
+            <Plus size={18} /> Add KPI
+          </button>
+        </div>
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-5">
@@ -119,7 +157,10 @@ export default function KPIsPage() {
       {store.records.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-800 bg-slate-900 p-10 text-center">
           <p className="text-lg font-semibold text-slate-100">No KPIs tracked yet. Add your first KPI.</p>
-          <button onClick={() => setEditing(emptyKpi())} className="mt-5 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500">Add KPI</button>
+          <div className="mt-5 flex justify-center gap-3">
+            <button onClick={loadTemplates} className="rounded-lg border border-slate-700 px-4 py-2 font-medium text-slate-200 hover:bg-slate-800">Load Merit KPI Templates</button>
+            <button onClick={() => setEditing(emptyKpi())} className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500">Add KPI</button>
+          </div>
         </div>
       ) : (
         <>
@@ -130,6 +171,7 @@ export default function KPIsPage() {
                   <div>
                     <h2 className="font-semibold text-white">{kpi.title}</h2>
                     <p className="mt-1 text-xs text-slate-500">{kpi.category} - {kpi.period}</p>
+                    <p className="mt-1 text-xs text-blue-400">{tracks.find((track) => track.id === kpi.operating_track_id)?.name || "No track"}</p>
                   </div>
                   <StatusBadge status={kpi.status} />
                 </div>
@@ -143,12 +185,13 @@ export default function KPIsPage() {
           <div className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
             <table className="w-full min-w-[900px]">
               <thead className="bg-slate-950">
-                <tr>{["Title", "Category", "Period", "Progress", "Status", "Priority", "Owner", "Actions"].map((head) => <th key={head} className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">{head}</th>)}</tr>
+                <tr>{["Title", "Track", "Category", "Period", "Progress", "Status", "Priority", "Owner", "Actions"].map((head) => <th key={head} className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-400">{head}</th>)}</tr>
               </thead>
               <tbody>
                 {filtered.map((kpi) => (
                   <tr key={kpi.id} className="border-t border-slate-800 hover:bg-slate-800/60">
                     <td className="px-4 py-4 font-medium text-slate-100">{kpi.title}</td>
+                    <td className="px-4 py-4 text-sm text-slate-400">{tracks.find((track) => track.id === kpi.operating_track_id)?.name || "-"}</td>
                     <td className="px-4 py-4 text-sm text-slate-400">{kpi.category}</td>
                     <td className="px-4 py-4 text-sm text-slate-400">{kpi.period}</td>
                     <td className="px-4 py-4 text-sm text-slate-300">{kpi.current_value}/{kpi.target_value} {kpi.unit}</td>
@@ -190,6 +233,17 @@ export default function KPIsPage() {
                 <SelectField name="priority" label="Priority" defaultValue={editing.priority} options={priorities} />
                 <Input name="owner" label="Owner" defaultValue={editing.owner} />
               </div>
+              <label className="block">
+                <span className="mb-1 block text-sm text-slate-400">Linked operating track</span>
+                <select name="operating_track_id" defaultValue={editing.operating_track_id || ""} className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none">
+                  <option value="">No track</option>
+                  {tracks.map((track) => <option key={track.id} value={track.id}>{track.name}</option>)}
+                </select>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-300">
+                <input type="checkbox" name="manual_status_override" defaultChecked={editing.manual_status_override || editing.status === "paused"} className="h-4 w-4 accent-blue-600" />
+                Manually override status
+              </label>
               <Textarea name="notes" label="Notes" defaultValue={editing.notes || ""} />
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setEditing(null)} className="flex-1 rounded-lg border border-slate-700 px-4 py-2 font-medium text-slate-300 hover:bg-slate-900">Cancel</button>

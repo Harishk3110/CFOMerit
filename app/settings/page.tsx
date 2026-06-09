@@ -17,6 +17,9 @@ const defaultSettings = (): CompanySettings => {
     target_users: "Students, recruiters, startup founders hiring interns or juniors, schools and career offices.",
     current_strategic_focus: "Grow student project supply, validate recruiter demand, improve portfolio UI, build recruiter discovery workflow, prepare investor narrative.",
     default_currency: "USD",
+    current_north_star_metric: "verified student projects uploaded",
+    biggest_assumption: "recruiters will use proof-of-work profiles to evaluate early talent faster than resumes",
+    biggest_risk: "building product before enough recruiter demand is validated",
     created_at: now,
     updated_at: now,
   };
@@ -40,6 +43,9 @@ export default function SettingsPage() {
       target_users: String(data.get("target_users") || ""),
       current_strategic_focus: String(data.get("current_strategic_focus") || ""),
       default_currency: String(data.get("default_currency") || "USD"),
+      current_north_star_metric: String(data.get("current_north_star_metric") || ""),
+      biggest_assumption: String(data.get("biggest_assumption") || ""),
+      biggest_risk: String(data.get("biggest_risk") || ""),
       updated_at: new Date().toISOString(),
     };
     settingsStore.setRecords([record]);
@@ -75,6 +81,9 @@ export default function SettingsPage() {
           <Textarea name="target_users" label="Target users" defaultValue={settings.target_users} />
           <Textarea name="current_strategic_focus" label="Current strategic focus" defaultValue={settings.current_strategic_focus} />
           <Input name="default_currency" label="Default currency" defaultValue={settings.default_currency} />
+          <Input name="current_north_star_metric" label="Current north star metric" defaultValue={settings.current_north_star_metric || ""} />
+          <Textarea name="biggest_assumption" label="Biggest assumption" defaultValue={settings.biggest_assumption || ""} />
+          <Textarea name="biggest_risk" label="Biggest risk" defaultValue={settings.biggest_risk || ""} />
         </div>
         <button className="mt-6 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 font-medium text-white hover:bg-blue-500">
           <Save size={18} /> Save Settings

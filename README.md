@@ -40,12 +40,14 @@ If `OPENAI_API_KEY` is missing, the UI still works and uses deterministic local 
 
 - Dashboard: action list, KPI snapshot, follow-ups, finance, weekly execution, important notes, risks.
 - KPIs: add/edit/delete KPIs, progress bars, filters, search, priority/status sorting.
+- Operating Tracks: add/edit/delete Merit workstreams, load optional Merit track templates, track health and linked KPIs/tasks/notes.
 - Outreach: add/edit/delete leads, notes, statuses, follow-up dates, editable message drafts, Copy Message only.
 - Investors: add/edit/delete investors, meeting notes, concerns, next steps, outreach draft, meeting brief.
-- Finance: add/edit/delete costs, editable finance settings, burn/runway calculations, CSV export.
-- Weekly Execution: create/edit/delete weekly plan, add/edit/delete tasks, move statuses.
+- Finance: add/edit/delete costs, editable finance settings, quality labels, renewal warnings, burn/runway calculations, CSV export.
+- Weekly Execution: create/edit/delete weekly plan, add/edit/delete tasks, move statuses, leverage scoring, optional Merit task templates.
 - AI Briefings: generate/add/edit/delete/copy briefings from current local data.
-- Notes: add/edit/delete/pin founder notes with search and filters.
+- Notes: add/edit/delete/pin founder notes plus a decision log.
+- Risks: add/edit/delete risks and blockers with severity scoring and operating-track links.
 - Settings: editable company context and local data reset.
 
 ## Supabase Migrations
@@ -54,6 +56,7 @@ Run these migrations in order:
 
 - `supabase/migrations/001_initial_schema.sql`
 - `supabase/migrations/003_kpis_notes_company_settings.sql`
+- `supabase/migrations/004_founder_operating_system.sql`
 
 There is no live seed migration. The app starts empty unless you add data manually.
 

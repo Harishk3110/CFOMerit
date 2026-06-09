@@ -14,17 +14,21 @@ import {
   X,
   BarChart3,
   NotebookText,
+  Route,
+  ShieldAlert,
 } from "lucide-react";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "KPIs", href: "/kpis", icon: BarChart3 },
+  { name: "Operating Tracks", href: "/tracks", icon: Route },
   { name: "Outreach", href: "/outreach", icon: Users },
   { name: "Investors", href: "/investors", icon: TrendingUp },
   { name: "Finance", href: "/finance", icon: DollarSign },
   { name: "Weekly Execution", href: "/weekly", icon: Zap },
   { name: "AI Briefings", href: "/briefings", icon: LayoutDashboard },
   { name: "Notes", href: "/notes", icon: NotebookText },
+  { name: "Risks", href: "/risks", icon: ShieldAlert },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 

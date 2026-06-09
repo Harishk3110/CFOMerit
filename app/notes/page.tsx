@@ -3,10 +3,10 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Edit, Pin, Plus, Search, Trash2 } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
-import type { FounderNote } from "@/lib/types";
+import type { DecisionLog, FounderNote } from "@/lib/types";
 import { useLocalRecords } from "@/lib/use-local-records";
 
-const categories: FounderNote["category"][] = ["general", "outreach", "investor", "finance", "product", "strategy", "meeting", "personal reminder"];
+const categories: FounderNote["category"][] = ["general", "outreach", "investor", "finance", "product", "strategy", "meeting", "personal reminder", "decision", "risk"];
 const statuses: FounderNote["status"][] = ["open", "in_progress", "done", "archived"];
 const priorities: FounderNote["priority"][] = ["low", "medium", "high", "critical"];
 
@@ -25,9 +25,16 @@ const emptyNote = (): FounderNote => {
   };
 };
 
+const emptyDecision = (): DecisionLog => {
+  const now = new Date().toISOString();
+  return { id: `decision-${crypto.randomUUID()}`, decision: "", context: "", options_considered: "", final_choice: "", reason: "", owner: "", decision_date: new Date().toISOString().slice(0, 10), linked_track_id: "", linked_kpi_id: "", created_at: now, updated_at: now };
+};
+
 export default function NotesPage() {
   const store = useLocalRecords<FounderNote>("founder_notes", []);
+  const decisionsStore = useLocalRecords<DecisionLog>("decision_log", []);
   const [editing, setEditing] = useState<FounderNote | null>(null);
+  const [editingDecision, setEditingDecision] = useState<DecisionLog | null>(null);
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -61,6 +68,8 @@ export default function NotesPage() {
       linked_lead_id: String(data.get("linked_lead_id") || ""),
       linked_investor_id: String(data.get("linked_investor_id") || ""),
       linked_task_id: String(data.get("linked_task_id") || ""),
+      linked_kpi_id: String(data.get("linked_kpi_id") || ""),
+      linked_track_id: String(data.get("linked_track_id") || ""),
       pinned: data.get("pinned") === "on",
       updated_at: new Date().toISOString(),
     };
@@ -76,6 +85,32 @@ export default function NotesPage() {
     if (window.confirm(`Delete note "${note.title}"?`)) store.deleteRecord(note.id);
   };
 
+  const saveDecision = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingDecision) return;
+    const data = new FormData(event.currentTarget);
+    const record: DecisionLog = {
+      ...editingDecision,
+      decision: String(data.get("decision") || ""),
+      context: String(data.get("context") || ""),
+      options_considered: String(data.get("options_considered") || ""),
+      final_choice: String(data.get("final_choice") || ""),
+      reason: String(data.get("reason") || ""),
+      owner: String(data.get("owner") || ""),
+      decision_date: String(data.get("decision_date") || ""),
+      linked_track_id: String(data.get("linked_track_id") || ""),
+      linked_kpi_id: String(data.get("linked_kpi_id") || ""),
+      updated_at: new Date().toISOString(),
+    };
+    if (decisionsStore.records.some((decision) => decision.id === record.id)) decisionsStore.updateRecord(record.id, record);
+    else decisionsStore.addRecord(record);
+    setEditingDecision(null);
+  };
+
+  const deleteDecision = (decision: DecisionLog) => {
+    if (window.confirm(`Delete decision "${decision.decision}"?`)) decisionsStore.deleteRecord(decision.id);
+  };
+
   return (
     <div className="max-w-7xl p-6 lg:p-8">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
@@ -83,9 +118,12 @@ export default function NotesPage() {
           <h1 className="text-3xl font-bold text-white">Notes</h1>
           <p className="mt-1 text-slate-400">Private founder scratchpad for strategy, meetings, and reminders.</p>
         </div>
-        <button onClick={() => setEditing(emptyNote())} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500">
-          <Plus size={18} /> Add Note
-        </button>
+        <div className="flex gap-3">
+          <button onClick={() => setEditingDecision(emptyDecision())} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-4 py-2 font-medium text-slate-200 hover:bg-slate-900"><Plus size={18} /> Add Decision</button>
+          <button onClick={() => setEditing(emptyNote())} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500">
+            <Plus size={18} /> Add Note
+          </button>
+        </div>
       </div>
 
       <div className="mb-6 flex flex-wrap gap-3">
@@ -131,6 +169,13 @@ export default function NotesPage() {
         </div>
       )}
 
+      <section className="mt-8 rounded-lg border border-slate-800 bg-slate-900 p-5">
+        <div className="mb-4 flex items-center justify-between"><h2 className="font-semibold text-white">Decision Log</h2><button onClick={() => setEditingDecision(emptyDecision())} className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">Add Decision</button></div>
+        {decisionsStore.records.length ? (
+          <div className="space-y-3">{decisionsStore.records.slice().sort((a, b) => b.decision_date.localeCompare(a.decision_date)).map((decision) => <div key={decision.id} className="rounded-lg border border-slate-800 bg-slate-950 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium text-slate-100">{decision.decision}</p><p className="mt-1 text-sm text-slate-400">{decision.final_choice}</p><p className="mt-1 text-xs text-slate-500">{decision.decision_date} - {decision.owner || "No owner"}</p></div><div className="flex gap-2"><button onClick={() => setEditingDecision(decision)} className="rounded-md border border-slate-700 p-2 text-slate-300 hover:bg-slate-800"><Edit size={16} /></button><button onClick={() => deleteDecision(decision)} className="rounded-md border border-red-900 p-2 text-red-300 hover:bg-red-950"><Trash2 size={16} /></button></div></div></div>)}</div>
+        ) : <p className="rounded-lg border border-dashed border-slate-800 bg-slate-950 p-4 text-sm text-slate-500">No decisions logged yet. Add decisions when Merit changes direction.</p>}
+      </section>
+
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-lg border border-slate-800 bg-slate-950 p-6 shadow-2xl">
@@ -148,11 +193,32 @@ export default function NotesPage() {
                 <Input name="linked_investor_id" label="Linked investor ID" defaultValue={editing.linked_investor_id || ""} />
                 <Input name="linked_task_id" label="Linked task ID" defaultValue={editing.linked_task_id || ""} />
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Input name="linked_kpi_id" label="Linked KPI ID" defaultValue={editing.linked_kpi_id || ""} />
+                <Input name="linked_track_id" label="Linked track ID" defaultValue={editing.linked_track_id || ""} />
+              </div>
               <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" name="pinned" defaultChecked={editing.pinned} className="h-4 w-4 accent-blue-600" /> Pin important note</label>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setEditing(null)} className="flex-1 rounded-lg border border-slate-700 px-4 py-2 font-medium text-slate-300 hover:bg-slate-900">Cancel</button>
                 <button type="submit" className="flex-1 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500">Save Note</button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {editingDecision && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-lg border border-slate-800 bg-slate-950 p-6 shadow-2xl">
+            <h2 className="mb-5 text-xl font-bold text-white">{decisionsStore.records.some((decision) => decision.id === editingDecision.id) ? "Edit Decision" : "Add Decision"}</h2>
+            <form onSubmit={saveDecision} className="space-y-4">
+              <Input name="decision" label="Decision" defaultValue={editingDecision.decision} required />
+              <Textarea name="context" label="Context" defaultValue={editingDecision.context} />
+              <Textarea name="options_considered" label="Options considered" defaultValue={editingDecision.options_considered} />
+              <Input name="final_choice" label="Final choice" defaultValue={editingDecision.final_choice} />
+              <Textarea name="reason" label="Reason" defaultValue={editingDecision.reason} />
+              <div className="grid grid-cols-2 gap-3"><Input name="owner" label="Owner" defaultValue={editingDecision.owner} /><Input name="decision_date" label="Decision date" defaultValue={editingDecision.decision_date} /></div>
+              <div className="grid grid-cols-2 gap-3"><Input name="linked_track_id" label="Linked track ID" defaultValue={editingDecision.linked_track_id || ""} /><Input name="linked_kpi_id" label="Linked KPI ID" defaultValue={editingDecision.linked_kpi_id || ""} /></div>
+              <div className="flex gap-3 pt-2"><button type="button" onClick={() => setEditingDecision(null)} className="flex-1 rounded-lg border border-slate-700 px-4 py-2 font-medium text-slate-300 hover:bg-slate-900">Cancel</button><button type="submit" className="flex-1 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500">Save Decision</button></div>
             </form>
           </div>
         </div>

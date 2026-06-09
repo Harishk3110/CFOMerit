@@ -1,4 +1,14 @@
-import type { Cost, FinanceSettings, Investor, KPI, OutreachLead, Task } from "./types";
+import type {
+  Cost,
+  FinanceSettings,
+  FounderNote,
+  Investor,
+  KPI,
+  OperatingTrack,
+  OutreachLead,
+  Risk,
+  Task,
+} from "./types";
 
 export function formatMoney(value: number, currency = "USD") {
   return new Intl.NumberFormat("en-US", {
@@ -161,6 +171,28 @@ export function kpiProgress(kpi: Pick<KPI, "current_value" | "target_value">) {
   return Math.min(100, Math.max(0, (kpi.current_value / kpi.target_value) * 100));
 }
 
+export function autoKpiStatus(kpi: Pick<KPI, "current_value" | "target_value" | "status" | "manual_status_override">): KPI["status"] {
+  if (kpi.status === "paused" || kpi.manual_status_override) return kpi.status;
+  const progress = kpiProgress(kpi);
+  if (progress >= 100) return "achieved";
+  if (progress >= 75) return "on_track";
+  if (progress >= 40) return "at_risk";
+  return "behind";
+}
+
+export function leverageScore(task: Pick<Task, "impact_score" | "urgency_score" | "effort_score">) {
+  return (task.impact_score || 0) + (task.urgency_score || 0) - (task.effort_score || 0);
+}
+
+export function trackProgress(track: Pick<OperatingTrack, "current_metric" | "target_metric">) {
+  if (!track.target_metric || track.target_metric <= 0) return 0;
+  return Math.min(100, Math.max(0, (track.current_metric / track.target_metric) * 100));
+}
+
+export function riskSeverity(risk: Pick<Risk, "probability" | "impact">) {
+  return Math.max(0, (risk.probability || 0) * (risk.impact || 0));
+}
+
 export function emptyFinanceSettings(): FinanceSettings {
   const now = new Date().toISOString();
   return {
@@ -174,4 +206,173 @@ export function emptyFinanceSettings(): FinanceSettings {
     updated_at: now,
     created_by: "",
   };
+}
+
+export const operatingTrackTemplates: Array<Pick<OperatingTrack, "name" | "description" | "priority" | "target_metric">> = [
+  { name: "Student Growth", description: "Grow student users and profile activation.", priority: "critical", target_metric: 100 },
+  { name: "Project Supply", description: "Increase uploaded proof-of-ability project supply.", priority: "critical", target_metric: 100 },
+  { name: "Passport Creation", description: "Manually create and improve Merit passports for early users.", priority: "high", target_metric: 50 },
+  { name: "Recruiter Demand", description: "Validate recruiter demand and create recruiter accounts.", priority: "critical", target_metric: 20 },
+  { name: "Investor Relations", description: "Track investor and accelerator outreach.", priority: "high", target_metric: 25 },
+  { name: "School Partnerships", description: "Build school and lecturer partnership pipeline.", priority: "high", target_metric: 20 },
+  { name: "Product v4", description: "Ship Merit v4 UI/UX and recruiter-facing workflows.", priority: "critical", target_metric: 100 },
+  { name: "AI Matching Layer", description: "Plan AI matching and recruiter discovery layer.", priority: "medium", target_metric: 10 },
+  { name: "Marketing", description: "Execute content and proof-of-ability narrative.", priority: "medium", target_metric: 30 },
+  { name: "Finance", description: "Control burn, runway, and software spend.", priority: "high", target_metric: 12 },
+  { name: "Founder Ops", description: "Weekly planning, KPI updates, and operating cadence.", priority: "critical", target_metric: 52 },
+];
+
+type KpiTemplate = Pick<KPI, "title" | "category" | "target_value" | "unit" | "period" | "priority" | "notes"> & { trackName: string };
+
+export const meritKpiTemplates: KpiTemplate[] = [
+  ["Student users signed up", "users", "Student Growth"],
+  ["Active student profiles", "users", "Student Growth"],
+  ["Uploaded projects", "product", "Project Supply"],
+  ["Completed passports/portfolios", "product", "Passport Creation"],
+  ["Profile completion rate", "users", "Passport Creation"],
+  ["Instagram DMs sent", "outreach", "Marketing"],
+  ["LinkedIn leads researched", "outreach", "Recruiter Demand"],
+  ["LinkedIn messages manually sent", "outreach", "Recruiter Demand"],
+  ["Follow-ups completed", "outreach", "Founder Ops"],
+  ["Outreach replies", "outreach", "Recruiter Demand"],
+  ["Meetings booked", "outreach", "Recruiter Demand"],
+  ["Recruiter accounts created", "recruiters", "Recruiter Demand"],
+  ["Recruiter interviews booked", "recruiters", "Recruiter Demand"],
+  ["Recruiter interviews completed", "recruiters", "Recruiter Demand"],
+  ["Recruiter validation calls", "recruiters", "Recruiter Demand"],
+  ["Recruiters willing to pilot", "recruiters", "Recruiter Demand"],
+  ["Potential paying recruiter leads", "recruiters", "Recruiter Demand"],
+  ["Schools contacted", "partnerships", "School Partnerships"],
+  ["Teachers/lecturers contacted", "partnerships", "School Partnerships"],
+  ["Partnership meetings booked", "partnerships", "School Partnerships"],
+  ["Partnership proposals sent", "partnerships", "School Partnerships"],
+  ["Investors researched", "investors", "Investor Relations"],
+  ["Investors contacted", "investors", "Investor Relations"],
+  ["Warm intros requested", "investors", "Investor Relations"],
+  ["Investor meetings booked", "investors", "Investor Relations"],
+  ["Accelerator applications submitted", "investors", "Investor Relations"],
+  ["Grants/competitions submitted", "investors", "Investor Relations"],
+  ["Merit v4 UI screens completed", "product", "Product v4"],
+  ["Bugs fixed", "product", "Product v4"],
+  ["Shareable passport links created", "product", "Product v4"],
+  ["Recruiter discovery features completed", "product", "Product v4"],
+  ["AI matching planning tasks completed", "product", "AI Matching Layer"],
+  ["Instagram posts published", "outreach", "Marketing"],
+  ["Reels/TikToks published", "outreach", "Marketing"],
+  ["Case studies created", "outreach", "Marketing"],
+  ["Founder posts published", "outreach", "Marketing"],
+  ["Website updates shipped", "product", "Marketing"],
+  ["Monthly burn", "finance", "Finance"],
+  ["Runway", "finance", "Finance"],
+  ["Revenue", "revenue", "Finance"],
+  ["Budget variance", "finance", "Finance"],
+  ["Recurring software costs", "finance", "Finance"],
+].map(([title, category, trackName]) => ({
+  title,
+  category: category as KPI["category"],
+  trackName,
+  target_value: category === "finance" ? 1 : 10,
+  unit: category === "finance" || category === "revenue" ? "USD" : "count",
+  period: "weekly",
+  priority: ["Student Growth", "Recruiter Demand", "Product v4", "Finance"].includes(trackName) ? "critical" : "high",
+  notes: "Loaded from Merit KPI templates. Edit target/current values for the current operating cycle.",
+}));
+
+type TaskTemplate = Pick<Task, "title" | "description" | "priority" | "status" | "effort_score" | "impact_score" | "urgency_score"> & { trackName: string };
+
+export const meritTaskTemplates: TaskTemplate[] = [
+  ["Find 20 design students on Instagram", "Student Growth"],
+  ["DM 20 students about Merit passport", "Student Growth"],
+  ["Create 5 student passports manually", "Passport Creation"],
+  ["Follow up with students who did not reply", "Student Growth"],
+  ["Track student profile completion", "Student Growth"],
+  ["Research 10 recruiter leads", "Recruiter Demand"],
+  ["Send 10 manual LinkedIn connection requests", "Recruiter Demand"],
+  ["Send 10 recruiter first DMs manually", "Recruiter Demand"],
+  ["Book 3 recruiter validation calls", "Recruiter Demand"],
+  ["Create 2 recruiter accounts", "Recruiter Demand"],
+  ["Ask recruiter for hiring pain points", "Recruiter Demand"],
+  ["Review current Merit UI", "Product v4"],
+  ["Finalize v4 UI direction", "Product v4"],
+  ["Build passport/profile page improvements", "Product v4"],
+  ["Build recruiter discovery workflow", "Product v4"],
+  ["Test shareable passport links", "Product v4"],
+  ["Fix authentication/sign-up issues", "Product v4"],
+  ["Research 10 investor targets", "Investor Relations"],
+  ["Prepare investor one-liner", "Investor Relations"],
+  ["Prepare investor update", "Investor Relations"],
+  ["Apply to SMU BIG", "Investor Relations"],
+  ["Apply to Build Week", "Investor Relations"],
+  ["Apply to relevant accelerator/grant", "Investor Relations"],
+  ["Follow up with warm intro sources", "Investor Relations"],
+  ["Publish Merit intro post", "Marketing"],
+  ["Publish proof-of-ability content", "Marketing"],
+  ["Create student success story", "Marketing"],
+  ["Create recruiter-facing post", "Marketing"],
+  ["Update website copy", "Marketing"],
+  ["Add all current software costs", "Finance"],
+  ["Set current cash balance", "Finance"],
+  ["Review monthly burn", "Finance"],
+  ["Cut unnecessary subscriptions", "Finance"],
+  ["Update runway calculation", "Finance"],
+  ["Plan weekly top 3 priorities", "Founder Ops"],
+  ["Review blocked tasks", "Founder Ops"],
+  ["Run weekly review", "Founder Ops"],
+  ["Decide next week's focus", "Founder Ops"],
+  ["Update KPI progress", "Founder Ops"],
+].map(([title, trackName]) => ({
+  title,
+  trackName,
+  description: `Merit operating task for ${trackName}.`,
+  priority: ["Recruiter Demand", "Product v4", "Finance", "Founder Ops"].includes(trackName) ? "high" : "medium",
+  status: "backlog",
+  effort_score: 2,
+  impact_score: ["Recruiter Demand", "Product v4"].includes(trackName) ? 5 : 4,
+  urgency_score: 4,
+}));
+
+export interface DailyAction {
+  id: string;
+  title: string;
+  source: string;
+  priority: "low" | "medium" | "high" | "critical";
+  dueDate?: string;
+  href: string;
+}
+
+export function buildDailyActions(input: {
+  tasks: Task[];
+  leads: OutreachLead[];
+  investors: Investor[];
+  kpis: KPI[];
+  costs: Cost[];
+  finance: ReturnType<typeof financeMetrics>;
+  notes: FounderNote[];
+  risks: Risk[];
+}): DailyAction[] {
+  const actions: DailyAction[] = [];
+  input.tasks
+    .filter((task) => task.due_date && task.due_date < todayIso() && task.status !== "done" && task.status !== "killed")
+    .forEach((task) => actions.push({ id: `task-${task.id}`, title: `Overdue task: ${task.title}`, source: "Weekly Execution", priority: task.priority, dueDate: task.due_date, href: "/weekly" }));
+  input.leads
+    .filter((lead) => isDueTodayOrEarlier(lead.next_follow_up_at))
+    .forEach((lead) => actions.push({ id: `lead-${lead.id}`, title: `Follow up: ${lead.first_name} ${lead.last_name}`, source: "Outreach", priority: lead.priority_score >= 80 ? "high" : "medium", dueDate: lead.next_follow_up_at, href: "/outreach" }));
+  input.investors
+    .filter((investor) => isDueTodayOrEarlier(investor.next_follow_up_at))
+    .forEach((investor) => actions.push({ id: `investor-${investor.id}`, title: `Investor follow-up: ${investor.investor_name}`, source: "Investors", priority: investor.priority_score >= 80 ? "high" : "medium", dueDate: investor.next_follow_up_at, href: "/investors" }));
+  input.tasks
+    .filter((task) => task.status === "blocked")
+    .forEach((task) => actions.push({ id: `blocked-${task.id}`, title: `Unblock: ${task.title}`, source: "Weekly Execution", priority: task.priority, dueDate: task.due_date, href: "/weekly" }));
+  input.kpis
+    .filter((kpi) => kpi.status === "behind")
+    .forEach((kpi) => actions.push({ id: `kpi-${kpi.id}`, title: `KPI behind: ${kpi.title}`, source: "KPIs", priority: kpi.priority, href: "/kpis" }));
+  if (!input.finance.isCashflowPositive && input.finance.runwayMonths < 3) {
+    actions.push({ id: "finance-runway", title: "Runway below 3 months", source: "Finance", priority: "critical", href: "/finance" });
+  }
+  input.risks
+    .filter((risk) => risk.status !== "closed" && risk.severity_score >= 12)
+    .forEach((risk) => actions.push({ id: `risk-${risk.id}`, title: `High-severity risk: ${risk.title}`, source: "Risks", priority: "critical", href: "/risks" }));
+
+  const rank = { critical: 4, high: 3, medium: 2, low: 1 };
+  return actions.sort((a, b) => rank[b.priority] - rank[a.priority]).slice(0, 12);
 }

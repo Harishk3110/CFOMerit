@@ -32,6 +32,12 @@ export interface OutreachLead {
   merit_angle?: string;
   status: "new" | "researched" | "message_generated" | "ready_to_send" | "connection_sent" | "connected" | "first_dm_sent" | "follow_up_1_sent" | "follow_up_2_sent" | "replied" | "meeting_booked" | "converted" | "not_interested" | "dead";
   owner: string;
+  channel?: "LinkedIn" | "Instagram" | "Email" | "In-person" | "Referral" | "Other";
+  message_sent_count?: number;
+  reply_count?: number;
+  last_reply_summary?: string;
+  meeting_outcome?: string;
+  next_action?: string;
   last_contacted_at?: string;
   next_follow_up_at?: string;
   created_at: string;
@@ -86,6 +92,13 @@ export interface Investor {
   notes?: string;
   concerns?: string;
   next_steps?: string;
+  fundraising_stage?: string;
+  investor_fit_score?: number;
+  warm_intro_status?: "needed" | "requested" | "secured" | "not_available";
+  next_ask?: string;
+  concern_tags?: string;
+  meeting_outcome?: string;
+  follow_up_quality?: "low" | "medium" | "high";
   created_at: string;
   updated_at: string;
   created_by: string;
@@ -127,6 +140,9 @@ export interface Cost {
   is_recurring: boolean;
   notes?: string;
   receipt_url?: string;
+  expense_quality?: "essential" | "useful" | "questionable" | "cut_candidate";
+  renewal_date?: string;
+  cancel_url?: string;
   created_at: string;
   updated_at: string;
   created_by: string;
@@ -154,7 +170,12 @@ export interface WeeklyPlan {
   owner: string;
   status: "planned" | "in_progress" | "completed";
   key_metric_target?: string;
+  expected_outcome?: string;
   actual_result?: string;
+  founder_reflection?: string;
+  what_worked?: string;
+  what_failed?: string;
+  next_week_recommendation?: string;
   notes?: string;
   created_at: string;
   updated_at: string;
@@ -168,12 +189,19 @@ export interface Task {
   description?: string;
   owner: string;
   priority: "low" | "medium" | "high" | "critical";
-  status: "backlog" | "this_week" | "in_progress" | "blocked" | "done" | "killed";
+  status: "backlog" | "this_week" | "in_progress" | "waiting" | "blocked" | "done" | "killed";
   due_date?: string;
+  operating_track_id?: string;
+  linked_kpi_id?: string;
   linked_strategy_pillar?: string;
   linked_experiment?: string;
   linked_investor_id?: string;
   linked_lead_id?: string;
+  effort_score?: number;
+  impact_score?: number;
+  urgency_score?: number;
+  leverage_score?: number;
+  notes?: string;
   created_at: string;
   updated_at: string;
   created_by: string;
@@ -200,7 +228,10 @@ export interface KPI {
   period: "daily" | "weekly" | "monthly" | "quarterly";
   owner: string;
   status: "on_track" | "at_risk" | "behind" | "achieved" | "paused";
+  manual_status_override?: boolean;
   priority: "low" | "medium" | "high" | "critical";
+  operating_track_id?: string;
+  progress_history?: Array<{ date: string; value: number }>;
   notes?: string;
   created_at: string;
   updated_at: string;
@@ -210,10 +241,12 @@ export interface FounderNote {
   id: string;
   title: string;
   content: string;
-  category: "general" | "outreach" | "investor" | "finance" | "product" | "strategy" | "meeting" | "personal reminder";
+  category: "general" | "outreach" | "investor" | "finance" | "product" | "strategy" | "meeting" | "personal reminder" | "decision" | "risk";
   linked_lead_id?: string;
   linked_investor_id?: string;
   linked_task_id?: string;
+  linked_kpi_id?: string;
+  linked_track_id?: string;
   priority: "low" | "medium" | "high" | "critical";
   status: "open" | "in_progress" | "done" | "archived";
   pinned: boolean;
@@ -231,6 +264,55 @@ export interface CompanySettings {
   target_users: string;
   current_strategic_focus: string;
   default_currency: string;
+  current_north_star_metric?: string;
+  biggest_assumption?: string;
+  biggest_risk?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OperatingTrack {
+  id: string;
+  name: string;
+  description: string;
+  owner: string;
+  status: "active" | "at_risk" | "blocked" | "paused" | "completed";
+  priority: "low" | "medium" | "high" | "critical";
+  target_metric: number;
+  current_metric: number;
+  deadline?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DecisionLog {
+  id: string;
+  decision: string;
+  context: string;
+  options_considered: string;
+  final_choice: string;
+  reason: string;
+  owner: string;
+  decision_date: string;
+  linked_track_id?: string;
+  linked_kpi_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Risk {
+  id: string;
+  title: string;
+  description: string;
+  category: "product" | "market" | "finance" | "legal" | "team" | "technical" | "fundraising" | "growth" | "execution";
+  probability: number;
+  impact: number;
+  severity_score: number;
+  mitigation: string;
+  owner: string;
+  status: "open" | "monitoring" | "mitigated" | "closed";
+  linked_track_id?: string;
   created_at: string;
   updated_at: string;
 }
